@@ -17,4 +17,8 @@ async def on_ready():
 async def ping(ctx):
     await ctx.send('Pong!')
 
+@bot.tree.command(name="ping", description="Pongs you!")
+async def ping(ctx):
+    await ctx.send('Pong!')
+
 bot.run(TOKEN)
