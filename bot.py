@@ -236,11 +236,28 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Bot ready: {bot.user}")
 
-@bot.tree.command(name="getStarted", description="Open the bot management menu")
+@bot.tree.command(name="getstarted", description="Open the bot management menu")
 async def get_started(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     view = BotManagerView(user_id)
     await interaction.response.send_message("Choose an action:", view=view, ephemeral=True)
+
+@bot.tree.command(name="help", description="List all Dots MGR commands")
+async def help_command(interaction: discord.Interaction):
+    # Prefix commandok
+    prefix_cmds = [f"{bot.command_prefix}{c.name} - {c.help or 'No description'}" for c in bot.commands]
+
+    # Slash commandok
+    slash_cmds = [f"/{c.name} - {c.description}" for c in bot.tree.get_commands()]
+
+    # Egyesítve
+    message = "📜 **Dots MGR Commands:**\n\n"
+    if prefix_cmds:
+        message += "**Prefix commands:**\n" + "\n".join(prefix_cmds) + "\n\n"
+    if slash_cmds:
+        message += "**Slash commands:**\n" + "\n".join(slash_cmds)
+
+    await interaction.response.send_message(message)
 
 # -------------------------------
 # ON MESSAGE (Hi trigger)
