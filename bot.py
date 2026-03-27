@@ -8,7 +8,7 @@ import json
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-GITHUB_REPO = "DotsMGR/Dots-MGR"  # privát repo
+GITHUB_REPO = "Dots-MGR/Dots-MGR"  # privát repo
 
 ADMIN_ID = 837680779072110593
 
