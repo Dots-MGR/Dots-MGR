@@ -224,11 +224,11 @@ class Menu(View):
         await interaction.response.send_modal(NewBotModal())
 
 # ---------- COMMANDS ----------
-@bot.tree.command(name="getstarted")
+@bot.tree.command(name="getstarted", description="Use this to show the menu!")
 async def getstarted(interaction):
-    await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
+    await interaction.response.send_message("", view=Menu(), ephemeral=True)
 
-@bot.tree.command(name="help", description="List all Dots MGR commands")
+@bot.tree.command(name="help", description="Lists all commands!")
 async def help_command(interaction: discord.Interaction):
     prefix_cmds = [
         f"{bot.command_prefix}{c.name} - {c.help or 'No description'}"
