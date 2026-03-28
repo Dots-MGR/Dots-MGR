@@ -5,6 +5,7 @@ from discord.ui import View, Button, Modal, TextInput
 import json
 import hashlib
 import requests
+import base64
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
@@ -55,23 +56,42 @@ def get_free_bot():
             return b
     return None
 
-# ---------- GITHUB ----------
-def create_repo(bot_id):
-    url = "https://api.github.com/orgs/{}/repos".format(GITHUB_ORG)
+# ---------- GITHUB TEMPLATE CLONE ----------
+def create_repo_from_template(bot_id):
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{TEMPLATE_REPO}/generate"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     data = {
+        "owner": GITHUB_ORG,
         "name": f"dots-bot-{bot_id}",
-        "private": True,
-        "auto_init": True
+        "private": True
     }
 
     r = requests.post(url, headers=headers, json=data)
+
     if r.status_code in [200, 201]:
         return r.json()["html_url"]
     else:
-        print("Repo error:", r.text)
+        print("Template clone error:", r.text)
         return None
+
+# ---------- CONFIG UPLOAD ----------
+def upload_config(repo_name, config_data):
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/contents/config.json"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    content = json.dumps(config_data, indent=2).encode("utf-8")
+    encoded = base64.b64encode(content).decode("utf-8")
+
+    data = {
+        "message": "Add config.json",
+        "content": encoded
+    }
+
+    r = requests.put(url, headers=headers, json=data)
+
+    if r.status_code not in [200, 201]:
+        print("Config upload failed:", r.text)
 
 # ---------- RENDER ----------
 def deploy_to_render(bot_id, repo_url, token):
@@ -107,10 +127,21 @@ class DoneView(View):
         bot_id = str(self.bot_id)
         data = bots_data[bot_id]
 
-        # 🔥 CREATE REPO
-        repo_url = create_repo(bot_id)
+        # 🔥 TEMPLATE CLONE
+        repo_url = create_repo_from_template(bot_id)
         if not repo_url:
-            return await interaction.response.send_message("❌ GitHub repo failed", ephemeral=True)
+            return await interaction.response.send_message("❌ Repo clone failed", ephemeral=True)
+
+        repo_name = f"dots-bot-{bot_id}"
+
+        # 🔧 CONFIG GENERATION
+        config = {
+            "name": data["name"],
+            "prefix": "!",
+            "owner_id": data["owner"]
+        }
+
+        upload_config(repo_name, config)
 
         # 🚀 DEPLOY
         result = deploy_to_render(bot_id, repo_url, data["token"])
@@ -146,7 +177,7 @@ class DoneView(View):
             view=None
         )
 
-        await interaction.response.send_message("✅ FULLY DEPLOYED!", ephemeral=True)
+        await interaction.response.send_message("✅ FULL AUTO DONE!", ephemeral=True)
 
 # ---------- MODAL ----------
 class NewBotModal(Modal, title="Create Bot"):
