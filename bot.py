@@ -8,9 +8,6 @@ import requests
 import base64
 import random
 
-# ---- Elbaszott bundáskenyér ----
-port = int(os.environ.get("PORT", 8000))
-
 # ---------- ENV ----------
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
