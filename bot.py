@@ -79,11 +79,7 @@ def upload_config(repo_name, config_data):
     content = json.dumps(config_data, indent=2).encode()
     encoded = base64.b64encode(content).decode()
 
-    data = {
-        "message": "Add config.json",
-        "content": encoded
-    }
-
+    data = {"message": "Add config.json", "content": encoded}
     requests.put(url, headers=headers, json=data)
 
 def update_config(repo_name, config, sha):
@@ -124,7 +120,7 @@ def redeploy(bot_id):
 
 # ---------- MODALS ----------
 class NewBotModal(Modal, title="Create Bot"):
-    name = TextInput(label="Bot Name")
+    name = TextInput(label="Bot Name", placeholder="My bot")
     desc = TextInput(label="Description", style=discord.TextStyle.paragraph)
     password = TextInput(label="Password")
 
@@ -157,10 +153,10 @@ class NewBotModal(Modal, title="Create Bot"):
 
         await interaction.response.send_message(f"🚀 Request sent (ID: {bot_id})", ephemeral=True)
 
-class CommandModal(Modal, title="Change bot commands"):
+class CommandModal(Modal, title="Add Command"):
     bot_id = TextInput(label="BotID")
     bot_pass = TextInput(label="Password")
-    cmd_req = TextInput(label="Command request (!hi Hello)", style=discord.TextStyle.paragraph)
+    cmd_req = TextInput(label="Command (!hi Hello)", style=discord.TextStyle.paragraph)
 
     async def on_submit(self, interaction):
         bid = self.bot_id.value
@@ -187,15 +183,13 @@ class CommandModal(Modal, title="Change bot commands"):
 
         config = json.loads(base64.b64decode(file["content"]).decode())
 
-        if "commands" not in config:
-            config["commands"] = {}
-
+        config.setdefault("commands", {})
         config["commands"][trigger.lower()] = response
 
         update_config(repo, config, file["sha"])
         redeploy(bid)
 
-        await interaction.response.send_message("✅ Command added!", ephemeral=True)
+        await interaction.response.send_message("✅ Command added & redeployed!", ephemeral=True)
 
 class EditBotModal(Modal, title="Edit Bot"):
     bot_id = TextInput(label="BotID")
@@ -258,8 +252,6 @@ class DoneView(View):
         })
 
         deploy_to_render(bid, repo, data["token"])
-
-        invite = f"https://discord.com/oauth2/authorize?client_id={data['client_id']}&scope=bot&permissions=8"
 
         data["status"] = "live"
         save()
