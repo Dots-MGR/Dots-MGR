@@ -118,6 +118,11 @@ def redeploy(bot_id):
     headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
     requests.post(url, headers=headers)
 
+def delete_render_service(bot_id):
+    url = f"https://api.render.com/v1/services/dots-bot-{bot_id}"
+    headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
+    requests.delete(url, headers=headers)
+
 # ---------- MODALS ----------
 class NewBotModal(Modal, title="Create Bot"):
     name = TextInput(label="Bot Name", placeholder="My bot")
@@ -180,7 +185,6 @@ class CommandModal(Modal, title="Add Command"):
 
         r = requests.get(url, headers=headers)
         file = r.json()
-
         config = json.loads(base64.b64decode(file["content"]).decode())
 
         config.setdefault("commands", {})
@@ -189,7 +193,63 @@ class CommandModal(Modal, title="Add Command"):
         update_config(repo, config, file["sha"])
         redeploy(bid)
 
-        await interaction.response.send_message("✅ Command added & redeployed!", ephemeral=True)
+        # Gombos szerkesztés/törlés
+        await interaction.response.send_message(
+            f"✅ Command '{trigger}' added & redeployed!",
+            ephemeral=True,
+            view=CommandView(bid, trigger)
+        )
+
+class EditCommandModal(Modal, title="Edit Command"):
+    new_response = TextInput(label="New response")
+
+    def __init__(self, bot_id, trigger):
+        super().__init__()
+        self.bot_id = bot_id
+        self.trigger = trigger
+
+    async def on_submit(self, interaction):
+        bid = self.bot_id
+        repo = f"dots-bot-{bid}"
+        url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        file = r.json()
+        config = json.loads(base64.b64decode(file["content"]).decode())
+
+        if "commands" in config and self.trigger in config["commands"]:
+            config["commands"][self.trigger] = self.new_response.value
+            update_config(repo, config, file["sha"])
+            redeploy(bid)
+
+        await interaction.response.send_message(f"✅ Command '{self.trigger}' updated!", ephemeral=True)
+
+class CommandView(View):
+    def __init__(self, bot_id, trigger):
+        super().__init__(timeout=None)
+        self.bot_id = bot_id
+        self.trigger = trigger
+
+    @discord.ui.button(label="Edit Command", style=discord.ButtonStyle.primary)
+    async def edit(self, interaction, button):
+        await interaction.response.send_modal(EditCommandModal(self.bot_id, self.trigger))
+
+    @discord.ui.button(label="Delete Command", style=discord.ButtonStyle.danger)
+    async def delete(self, interaction, button):
+        bid = self.bot_id
+        repo = f"dots-bot-{bid}"
+        url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
+        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+        r = requests.get(url, headers=headers)
+        file = r.json()
+        config = json.loads(base64.b64decode(file["content"]).decode())
+
+        if "commands" in config and self.trigger in config["commands"]:
+            del config["commands"][self.trigger]
+            update_config(repo, config, file["sha"])
+            redeploy(bid)
+
+        await interaction.response.send_message(f"✅ Command '{self.trigger}' deleted!", ephemeral=True)
 
 class EditBotModal(Modal, title="Edit Bot"):
     bot_id = TextInput(label="BotID")
@@ -224,10 +284,21 @@ class DeleteBotModal(Modal, title="Delete Bot"):
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
 
+        # Render törlése
+        delete_render_service(bid)
+
+        # GitHub repo törlése
+        repo_name = f"dots-bot-{bid}"
+        requests.delete(
+            f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}",
+            headers={"Authorization": f"token {GITHUB_TOKEN}"}
+        )
+
+        # Bot adat törlése
         del bots_data[bid]
         save()
 
-        await interaction.response.send_message("🗑️ Deleted!", ephemeral=True)
+        await interaction.response.send_message("🗑️ Deleted Render service, GitHub repo & bot data!", ephemeral=True)
 
 # ---------- DONE ----------
 class DoneView(View):
@@ -256,6 +327,7 @@ class DoneView(View):
         data["status"] = "live"
         save()
 
+        await bot.tree.sync()  # auto slash sync
         await interaction.response.send_message("✅ LIVE!", ephemeral=True)
 
 # ---------- VIEW ----------
