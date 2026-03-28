@@ -7,6 +7,8 @@ import hashlib
 import requests
 import base64
 
+port = int(os.environ.get("PORT", 8000))
+
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
