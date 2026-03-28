@@ -1,227 +1,222 @@
 import os
 import discord
 from discord.ext import commands
-from discord import app_commands
-from discord.ui import Button, View, Modal, TextInput
-import requests
+from discord.ui import View, Button, Modal, TextInput
 import json
 import hashlib
+import requests
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
-GITHUB_REPO = "Dots-MGR/Dots-MGR"
+RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
+
+GITHUB_ORG = "Dots-MGR"
+TEMPLATE_REPO = "bot-template"
 
 ADMIN_ID = 837680779072110593
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
-# --- Storage ---
 DATA_FILE = "data.json"
 
 bots_data = {}
-github_issues = {}
 bot_counter = 0
 
-# ---------- Utils ----------
-def hash_password(pw: str):
+# ---------- BOT POOL ----------
+available_bots = [
+    {"token": os.environ.get("BOT_TOKEN_1"), "client_id": os.environ.get("BOT_CLIENT_ID_1"), "used": False},
+    {"token": os.environ.get("BOT_TOKEN_2"), "client_id": os.environ.get("BOT_CLIENT_ID_2"), "used": False},
+]
+
+# ---------- UTILS ----------
+def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
-def save_data():
+def save():
     with open(DATA_FILE, "w") as f:
-        json.dump({
-            "bots": bots_data,
-            "issues": github_issues,
-            "counter": bot_counter
-        }, f, indent=2)
+        json.dump({"bots": bots_data, "counter": bot_counter, "pool": available_bots}, f, indent=2)
 
-def load_data():
-    global bots_data, github_issues, bot_counter
+def load():
+    global bots_data, bot_counter, available_bots
     try:
-        with open(DATA_FILE, "r") as f:
+        with open(DATA_FILE) as f:
             data = json.load(f)
-            bots_data = data.get("bots", {})
-            github_issues = data.get("issues", {})
-            bot_counter = data.get("counter", 0)
+            bots_data = data["bots"]
+            bot_counter = data["counter"]
+            available_bots = data["pool"]
     except:
-        bots_data = {}
-        github_issues = {}
-        bot_counter = 0
+        pass
 
-def create_github_issue(title, body):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/issues"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    r = requests.post(url, headers=headers, json={"title": title, "body": body})
-    if r.status_code == 201:
-        return r.json()["number"]
+def get_free_bot():
+    for b in available_bots:
+        if not b["used"] and b["token"]:
+            b["used"] = True
+            return b
     return None
 
-def close_github_issue(issue_number):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/issues/{issue_number}"
+# ---------- GITHUB ----------
+def create_repo(bot_id):
+    url = "https://api.github.com/orgs/{}/repos".format(GITHUB_ORG)
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    requests.patch(url, headers=headers, json={"state": "closed"})
 
-# ---------- Admin Done Button ----------
+    data = {
+        "name": f"dots-bot-{bot_id}",
+        "private": True,
+        "auto_init": True
+    }
+
+    r = requests.post(url, headers=headers, json=data)
+    if r.status_code in [200, 201]:
+        return r.json()["html_url"]
+    else:
+        print("Repo error:", r.text)
+        return None
+
+# ---------- RENDER ----------
+def deploy_to_render(bot_id, repo_url, token):
+    url = "https://api.render.com/v1/services"
+    headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
+
+    data = {
+        "type": "web_service",
+        "name": f"dots-bot-{bot_id}",
+        "repo": repo_url,
+        "branch": "main",
+        "runtime": "python",
+        "buildCommand": "pip install -r requirements.txt",
+        "startCommand": "python bot.py",
+        "envVars": [{"key": "BOT_TOKEN", "value": token}]
+    }
+
+    r = requests.post(url, headers=headers, json=data)
+    if r.status_code in [200, 201]:
+        return r.json()
+    else:
+        print("Render error:", r.text)
+        return None
+
+# ---------- DONE ----------
 class DoneView(View):
     def __init__(self, bot_id):
         super().__init__(timeout=None)
         self.bot_id = bot_id
 
     @discord.ui.button(label="Kész", style=discord.ButtonStyle.success)
-    async def done(self, interaction: discord.Interaction, button: Button):
-        bot_id = self.bot_id
+    async def done(self, interaction, button):
+        bot_id = str(self.bot_id)
+        data = bots_data[bot_id]
 
-        bots_data[str(bot_id)]["status"] = "done"
+        # 🔥 CREATE REPO
+        repo_url = create_repo(bot_id)
+        if not repo_url:
+            return await interaction.response.send_message("❌ GitHub repo failed", ephemeral=True)
 
-        issue = github_issues.get(str(bot_id))
-        if issue:
-            close_github_issue(issue)
+        # 🚀 DEPLOY
+        result = deploy_to_render(bot_id, repo_url, data["token"])
+        if not result:
+            return await interaction.response.send_message("❌ Deploy failed", ephemeral=True)
 
-        save_data()
+        # 🔗 INVITE LINK
+        invite = f"https://discord.com/oauth2/authorize?client_id={data['client_id']}&scope=bot&permissions=8"
+
+        data["status"] = "live"
+        data["repo"] = repo_url
+        data["invite"] = invite
+
+        save()
+
+        # 👤 USER DM
+        try:
+            user = await bot.fetch_user(data["owner"])
+            await user.send(
+                f"🚀 Your bot **{data['name']}** is LIVE!\n\n"
+                f"🔗 Invite: {invite}\n"
+                f"📦 Repo: {repo_url}"
+            )
+        except:
+            pass
 
         await interaction.message.edit(
             embed=discord.Embed(
-                title=f"Bot {bot_id} completed",
+                title=f"Bot {bot_id} LIVE",
+                description=data["name"],
                 color=discord.Color.green()
             ),
             view=None
         )
 
-        await interaction.response.send_message("✅ Done!", ephemeral=True)
+        await interaction.response.send_message("✅ FULLY DEPLOYED!", ephemeral=True)
 
-# ---------- Modals ----------
-class NewBotModal(Modal, title="New Bot"):
-    name = TextInput(label="Name", placeholder="My bot")
-    desc = TextInput(label="Description", style=discord.TextStyle.paragraph, placeholder="Cool bot")
-    tags = TextInput(label="Tags", placeholder="fun, utility")
-    password = TextInput(label="Password", placeholder="min 8 chars")
+# ---------- MODAL ----------
+class NewBotModal(Modal, title="Create Bot"):
+    name = TextInput(label="Bot Name", placeholder="My bot")
+    desc = TextInput(label="Description", style=discord.TextStyle.paragraph)
+    password = TextInput(label="Password")
 
     async def on_submit(self, interaction):
         global bot_counter
         bot_counter += 1
         bot_id = str(bot_counter)
 
+        free = get_free_bot()
+        if not free:
+            return await interaction.response.send_message("❌ No bots available", ephemeral=True)
+
         bots_data[bot_id] = {
             "name": self.name.value,
             "description": self.desc.value,
-            "tags": self.tags.value,
             "password": hash_password(self.password.value),
-            "status": "pending"
+            "owner": interaction.user.id,
+            "status": "pending",
+            "token": free["token"],
+            "client_id": free["client_id"]
         }
 
-        issue = create_github_issue(f"New Bot {bot_id}", json.dumps(bots_data[bot_id], indent=2))
-        github_issues[bot_id] = issue
-
-        save_data()
+        save()
 
         admin = await bot.fetch_user(ADMIN_ID)
         await admin.send(
-            embed=discord.Embed(title=f"New Bot {bot_id}", description=self.name.value),
+            embed=discord.Embed(title=f"Deploy Bot {bot_id}", description=self.name.value),
             view=DoneView(bot_id)
         )
 
-        await interaction.response.send_message(f"✅ Created (ID: {bot_id})", ephemeral=True)
+        await interaction.response.send_message(f"🚀 Request sent (ID: {bot_id})", ephemeral=True)
 
-class EditBotModal(Modal, title="Edit Bot"):
-    bot_id = TextInput(label="Bot ID", placeholder="ID")
-    name = TextInput(label="Name", required=False, placeholder="leave empty to keep")
-    desc = TextInput(label="Description", required=False, style=discord.TextStyle.paragraph)
-    tags = TextInput(label="Tags", required=False)
-    password = TextInput(label="Password", placeholder="current password")
-
-    async def on_submit(self, interaction):
-        bot_id = self.bot_id.value
-
-        if bot_id not in bots_data:
-            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
-
-        if bots_data[bot_id]["password"] != hash_password(self.password.value):
-            return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
-
-        if self.name.value:
-            bots_data[bot_id]["name"] = self.name.value
-        if self.desc.value:
-            bots_data[bot_id]["description"] = self.desc.value
-        if self.tags.value:
-            bots_data[bot_id]["tags"] = self.tags.value
-
-        bots_data[bot_id]["status"] = "pending"
-
-        issue = create_github_issue(f"Edit Bot {bot_id}", json.dumps(bots_data[bot_id], indent=2))
-        github_issues[bot_id] = issue
-
-        save_data()
-
-        admin = await bot.fetch_user(ADMIN_ID)
-        await admin.send(
-            embed=discord.Embed(title=f"Edit Bot {bot_id}"),
-            view=DoneView(bot_id)
-        )
-
-        await interaction.response.send_message("✅ Edit requested", ephemeral=True)
-
-class DeleteBotModal(Modal, title="Delete Bot"):
-    bot_id = TextInput(label="Bot ID")
-    password = TextInput(label="Password")
-
-    async def on_submit(self, interaction):
-        bot_id = self.bot_id.value
-
-        if bot_id not in bots_data:
-            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
-
-        if bots_data[bot_id]["password"] != hash_password(self.password.value):
-            return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
-
-        issue = create_github_issue(f"Delete Bot {bot_id}", json.dumps(bots_data[bot_id], indent=2))
-        github_issues[bot_id] = issue
-
-        save_data()
-
-        admin = await bot.fetch_user(ADMIN_ID)
-        await admin.send(
-            embed=discord.Embed(title=f"Delete Bot {bot_id}"),
-            view=DoneView(bot_id)
-        )
-
-        await interaction.response.send_message("✅ Delete requested", ephemeral=True)
-
-# ---------- View (FIXED BUTTONS) ----------
-class BotMenuView(View):
+# ---------- VIEW ----------
+class Menu(View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="New Bot", style=discord.ButtonStyle.success)
-    async def new_bot(self, interaction, button):
+    async def new(self, interaction, button):
         await interaction.response.send_modal(NewBotModal())
 
-    @discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
-    async def edit_bot(self, interaction, button):
-        await interaction.response.send_modal(EditBotModal())
-
-    @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
-    async def delete_bot(self, interaction, button):
-        await interaction.response.send_modal(DeleteBotModal())
-
-# ---------- Commands ----------
-@bot.tree.command(name="getstarted", description="Open menu")
+# ---------- COMMANDS ----------
+@bot.tree.command(name="getstarted")
 async def getstarted(interaction):
-    await interaction.response.send_message("Menu:", view=BotMenuView(), ephemeral=True)
+    await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
 
-@bot.command()
-async def getstarted(ctx):
-    await ctx.send("Menu:", view=BotMenuView())
+@bot.tree.command(name="mybots")
+async def mybots(interaction):
+    user_id = interaction.user.id
 
-@bot.tree.command(name="help", description="Commands list")
-async def help_cmd(interaction):
-    cmds = [f"/{c.name}" for c in bot.tree.get_commands()]
-    await interaction.response.send_message("\n".join(cmds), ephemeral=True)
+    bots = [(bid, d) for bid, d in bots_data.items() if d["owner"] == user_id]
 
-# ---------- Ready ----------
+    if not bots:
+        return await interaction.response.send_message("No bots.", ephemeral=True)
+
+    msg = ""
+    for bid, d in bots:
+        msg += f"ID {bid} | {d['name']} | {d['status']}\n"
+
+    await interaction.response.send_message(msg, ephemeral=True)
+
+# ---------- READY ----------
 @bot.event
 async def on_ready():
-    load_data()
-    print("Bot ready")
+    load()
     await bot.tree.sync()
+    print("READY")
 
 bot.run(DISCORD_TOKEN)
