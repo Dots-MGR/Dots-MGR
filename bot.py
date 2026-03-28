@@ -1,7 +1,7 @@
 import os
 import discord
 from discord.ext import commands
-from discord.ui import View, Button, Modal, TextInput
+from discord.ui import View, Modal, TextInput
 import json
 import hashlib
 import requests
@@ -16,7 +16,10 @@ TEMPLATE_REPO = "bot-template"
 
 ADMIN_ID = 837680779072110593
 
+# ✅ FIX: message content intent
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 DATA_FILE = "data.json"
@@ -61,86 +64,82 @@ def create_repo_from_template(bot_id):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{TEMPLATE_REPO}/generate"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
-    data = {
+    r = requests.post(url, headers=headers, json={
         "owner": GITHUB_ORG,
         "name": f"dots-bot-{bot_id}",
         "private": True
-    }
+    })
 
-    r = requests.post(url, headers=headers, json=data)
-    if r.status_code in [200, 201]:
-        return r.json()["html_url"]
-    return None
+    return r.json()["html_url"] if r.status_code in [200, 201] else None
 
-def upload_config(repo_name, config_data):
-    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/contents/config.json"
+def get_config(repo):
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    file = r.json()
+    config = json.loads(base64.b64decode(file["content"]).decode())
+    return config, file["sha"]
 
-    content = json.dumps(config_data, indent=2).encode()
-    encoded = base64.b64encode(content).decode()
-
-    data = {"message": "Add config.json", "content": encoded}
-    requests.put(url, headers=headers, json=data)
-
-def update_config(repo_name, config, sha):
-    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/contents/config.json"
+def update_config(repo, config, sha):
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-
-    encoded = base64.b64encode(json.dumps(config, indent=2).encode()).decode()
 
     requests.put(url, headers=headers, json={
-        "message": "Update commands",
-        "content": encoded,
+        "message": "update config",
+        "content": base64.b64encode(json.dumps(config, indent=2).encode()).decode(),
         "sha": sha
     })
 
 # ---------- RENDER ----------
-def deploy_to_render(bot_id, repo_url, token):
-    url = "https://api.render.com/v1/services"
-    headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
-
-    data = {
-        "type": "web_service",
-        "name": f"dots-bot-{bot_id}",
-        "repo": repo_url,
-        "branch": "main",
-        "runtime": "python",
-        "buildCommand": "pip install --upgrade pip & pip install -r requirements.txt & pip install -U discord.py",
-        "startCommand": "python bot.py",
-        "envVars": [{"key": "BOT_TOKEN", "value": token}]
-    }
-
-    r = requests.post(url, headers=headers, json=data)
-    return r.status_code in [200, 201]
+def deploy(bot_id, repo, token):
+    requests.post(
+        "https://api.render.com/v1/services",
+        headers={"Authorization": f"Bearer {RENDER_API_KEY}"},
+        json={
+            "type": "web_service",
+            "name": f"dots-bot-{bot_id}",
+            "repo": repo,
+            "runtime": "python",
+            "buildCommand": "pip install -r requirements.txt",
+            "startCommand": "python bot.py",
+            "envVars": [{"key": "BOT_TOKEN", "value": token}]
+        }
+    )
 
 def redeploy(bot_id):
-    url = f"https://api.render.com/v1/services/dots-bot-{bot_id}/deploys"
-    headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
-    requests.post(url, headers=headers)
+    requests.post(
+        f"https://api.render.com/v1/services/dots-bot-{bot_id}/deploys",
+        headers={"Authorization": f"Bearer {RENDER_API_KEY}"}
+    )
 
-def delete_render_service(bot_id):
-    url = f"https://api.render.com/v1/services/dots-bot-{bot_id}"
-    headers = {"Authorization": f"Bearer {RENDER_API_KEY}"}
-    requests.delete(url, headers=headers)
+def delete_render(bot_id):
+    requests.delete(
+        f"https://api.render.com/v1/services/dots-bot-{bot_id}",
+        headers={"Authorization": f"Bearer {RENDER_API_KEY}"}
+    )
 
 # ---------- MODALS ----------
-class NewBotModal(Modal, title="Create Bot"):
-    name = TextInput(label="Bot Name", placeholder="My bot")
-    desc = TextInput(label="Description", style=discord.TextStyle.paragraph)
-    password = TextInput(label="Password")
+
+# ✅ FIXED FORM (matches your spec)
+class NewBotModal(Modal, title="New bot form"):
+    name = TextInput(label="Bot name", min_length=2, max_length=32, placeholder="A discord bot")
+    desc = TextInput(label="Bot description", style=discord.TextStyle.paragraph, max_length=400, placeholder="I'm friendly!")
+    tags = TextInput(label="Bot tags (comma separated)", required=False, placeholder="fun, helpful")
+    password = TextInput(label="Access password", min_length=8, max_length=100, placeholder="12345678")
 
     async def on_submit(self, interaction):
         global bot_counter
         bot_counter += 1
-        bot_id = str(bot_counter)
+        bid = str(bot_counter)
 
         free = get_free_bot()
         if not free:
             return await interaction.response.send_message("❌ No bots available", ephemeral=True)
 
-        bots_data[bot_id] = {
+        bots_data[bid] = {
             "name": self.name.value,
             "description": self.desc.value,
+            "tags": self.tags.value,
             "password": hash_password(self.password.value),
             "owner": interaction.user.id,
             "token": free["token"],
@@ -151,110 +150,15 @@ class NewBotModal(Modal, title="Create Bot"):
         save()
 
         admin = await bot.fetch_user(ADMIN_ID)
-        await admin.send(
-            embed=discord.Embed(title=f"Deploy Bot {bot_id}", description=self.name.value),
-            view=DoneView(bot_id)
-        )
+        await admin.send(embed=discord.Embed(title=f"Deploy {bid}"), view=DoneView(bid))
 
-        await interaction.response.send_message(f"🚀 Request sent (ID: {bot_id})", ephemeral=True)
+        await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
 
+# ---------- COMMAND SYSTEM ----------
 class CommandModal(Modal, title="Add Command"):
     bot_id = TextInput(label="BotID")
-    bot_pass = TextInput(label="Password")
-    cmd_req = TextInput(label="Command (!hi Hello)", style=discord.TextStyle.paragraph)
-
-    async def on_submit(self, interaction):
-        bid = self.bot_id.value
-
-        if bid not in bots_data:
-            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
-
-        data = bots_data[bid]
-
-        if data["password"] != hash_password(self.bot_pass.value):
-            return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
-
-        try:
-            trigger, response = self.cmd_req.value.split(" ", 1)
-        except:
-            return await interaction.response.send_message("❌ Format: !hi Hello", ephemeral=True)
-
-        repo = f"dots-bot-{bid}"
-        url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-
-        r = requests.get(url, headers=headers)
-        file = r.json()
-        config = json.loads(base64.b64decode(file["content"]).decode())
-
-        config.setdefault("commands", {})
-        config["commands"][trigger.lower()] = response
-
-        update_config(repo, config, file["sha"])
-        redeploy(bid)
-
-        # Gombos szerkesztés/törlés
-        await interaction.response.send_message(
-            f"✅ Command '{trigger}' added & redeployed!",
-            ephemeral=True,
-            view=CommandView(bid, trigger)
-        )
-
-class EditCommandModal(Modal, title="Edit Command"):
-    new_response = TextInput(label="New response")
-
-    def __init__(self, bot_id, trigger):
-        super().__init__()
-        self.bot_id = bot_id
-        self.trigger = trigger
-
-    async def on_submit(self, interaction):
-        bid = self.bot_id
-        repo = f"dots-bot-{bid}"
-        url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(url, headers=headers)
-        file = r.json()
-        config = json.loads(base64.b64decode(file["content"]).decode())
-
-        if "commands" in config and self.trigger in config["commands"]:
-            config["commands"][self.trigger] = self.new_response.value
-            update_config(repo, config, file["sha"])
-            redeploy(bid)
-
-        await interaction.response.send_message(f"✅ Command '{self.trigger}' updated!", ephemeral=True)
-
-class CommandView(View):
-    def __init__(self, bot_id, trigger):
-        super().__init__(timeout=None)
-        self.bot_id = bot_id
-        self.trigger = trigger
-
-    @discord.ui.button(label="Edit Command", style=discord.ButtonStyle.primary)
-    async def edit(self, interaction, button):
-        await interaction.response.send_modal(EditCommandModal(self.bot_id, self.trigger))
-
-    @discord.ui.button(label="Delete Command", style=discord.ButtonStyle.danger)
-    async def delete(self, interaction, button):
-        bid = self.bot_id
-        repo = f"dots-bot-{bid}"
-        url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
-        headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-        r = requests.get(url, headers=headers)
-        file = r.json()
-        config = json.loads(base64.b64decode(file["content"]).decode())
-
-        if "commands" in config and self.trigger in config["commands"]:
-            del config["commands"][self.trigger]
-            update_config(repo, config, file["sha"])
-            redeploy(bid)
-
-        await interaction.response.send_message(f"✅ Command '{self.trigger}' deleted!", ephemeral=True)
-
-class EditBotModal(Modal, title="Edit Bot"):
-    bot_id = TextInput(label="BotID")
     password = TextInput(label="Password")
-    name = TextInput(label="New name", required=False)
+    cmd = TextInput(label="Command (!hi Hello)")
 
     async def on_submit(self, interaction):
         bid = self.bot_id.value
@@ -265,12 +169,69 @@ class EditBotModal(Modal, title="Edit Bot"):
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
 
-        if self.name.value:
-            bots_data[bid]["name"] = self.name.value
+        try:
+            trigger, response = self.cmd.value.split(" ", 1)
+        except:
+            return await interaction.response.send_message("❌ Format: !cmd text", ephemeral=True)
 
-        save()
+        repo = f"dots-bot-{bid}"
+        config, sha = get_config(repo)
+
+        config.setdefault("commands", {})
+        config["commands"][trigger.lower()] = response
+
+        update_config(repo, config, sha)
+        redeploy(bid)
+
+        await interaction.response.send_message(
+            f"✅ Added `{trigger}`",
+            ephemeral=True,
+            view=CommandView(bid, trigger)
+        )
+
+# ---------- COMMAND EDIT / DELETE ----------
+class CommandView(View):
+    def __init__(self, bot_id, trigger):
+        super().__init__(timeout=None)
+        self.bot_id = bot_id
+        self.trigger = trigger
+
+    @discord.ui.button(label="Edit", style=discord.ButtonStyle.primary)
+    async def edit(self, interaction, button):
+        await interaction.response.send_modal(EditCommandModal(self.bot_id, self.trigger))
+
+    @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger)
+    async def delete(self, interaction, button):
+        repo = f"dots-bot-{self.bot_id}"
+        config, sha = get_config(repo)
+
+        if self.trigger in config.get("commands", {}):
+            del config["commands"][self.trigger]
+            update_config(repo, config, sha)
+            redeploy(self.bot_id)
+
+        await interaction.response.send_message("🗑️ Deleted!", ephemeral=True)
+
+class EditCommandModal(Modal, title="Edit Command"):
+    new_text = TextInput(label="New response")
+
+    def __init__(self, bot_id, trigger):
+        super().__init__()
+        self.bot_id = bot_id
+        self.trigger = trigger
+
+    async def on_submit(self, interaction):
+        repo = f"dots-bot-{self.bot_id}"
+        config, sha = get_config(repo)
+
+        config["commands"][self.trigger] = self.new_text.value
+
+        update_config(repo, config, sha)
+        redeploy(self.bot_id)
+
         await interaction.response.send_message("✅ Updated!", ephemeral=True)
 
+# ---------- DELETE BOT ----------
 class DeleteBotModal(Modal, title="Delete Bot"):
     bot_id = TextInput(label="BotID")
     password = TextInput(label="Password")
@@ -284,53 +245,47 @@ class DeleteBotModal(Modal, title="Delete Bot"):
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
 
-        # Render törlése
-        delete_render_service(bid)
+        delete_render(bid)
 
-        # GitHub repo törlése
-        repo_name = f"dots-bot-{bid}"
         requests.delete(
-            f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}",
+            f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bid}",
             headers={"Authorization": f"token {GITHUB_TOKEN}"}
         )
 
-        # Bot adat törlése
         del bots_data[bid]
         save()
 
-        await interaction.response.send_message("🗑️ Deleted Render service, GitHub repo & bot data!", ephemeral=True)
+        await interaction.response.send_message("🗑️ Fully deleted!", ephemeral=True)
 
-# ---------- DONE ----------
+# ---------- DEPLOY ----------
 class DoneView(View):
     def __init__(self, bot_id):
         super().__init__(timeout=None)
         self.bot_id = bot_id
 
-    @discord.ui.button(label="Kész", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="Deploy", style=discord.ButtonStyle.success)
     async def done(self, interaction, button):
         bid = str(self.bot_id)
         data = bots_data[bid]
 
         repo = create_repo_from_template(bid)
-        if not repo:
-            return await interaction.response.send_message("❌ Repo fail", ephemeral=True)
 
-        upload_config(f"dots-bot-{bid}", {
+        update_config(f"dots-bot-{bid}", {
             "name": data["name"],
             "prefix": "!",
-            "owner_id": data["owner"],
             "commands": {}
-        })
+        }, sha=None)
 
-        deploy_to_render(bid, repo, data["token"])
+        deploy(bid, repo, data["token"])
 
         data["status"] = "live"
         save()
 
-        await bot.tree.sync()  # auto slash sync
+        await bot.tree.sync()
+
         await interaction.response.send_message("✅ LIVE!", ephemeral=True)
 
-# ---------- VIEW ----------
+# ---------- MENU ----------
 class Menu(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -339,31 +294,18 @@ class Menu(View):
     async def new(self, interaction, button):
         await interaction.response.send_modal(NewBotModal())
 
-    @discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
-    async def edit(self, interaction, button):
-        await interaction.response.send_modal(EditBotModal())
-
     @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
     async def delete(self, interaction, button):
         await interaction.response.send_modal(DeleteBotModal())
 
 # ---------- COMMANDS ----------
-@bot.tree.command(name="getstarted", description="Use this to show the menu!")
+@bot.tree.command(name="getstarted")
 async def getstarted(interaction):
     await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
 
-@bot.tree.command(name="cmds", description="Add, remove or modify a hosted bots commands!")
+@bot.tree.command(name="cmds")
 async def cmds(interaction):
-    owned = [b for b in bots_data.values() if b["owner"] == interaction.user.id]
-    if not owned:
-        return await interaction.response.send_message("❌ No bots", ephemeral=True)
-
     await interaction.response.send_modal(CommandModal())
-
-@bot.tree.command(name="help", description="Lists all commands!")
-async def help_command(interaction):
-    cmds = [f"/{c.name}" for c in bot.tree.get_commands()]
-    await interaction.response.send_message("\n".join(cmds), ephemeral=True)
 
 # ---------- READY ----------
 @bot.event
