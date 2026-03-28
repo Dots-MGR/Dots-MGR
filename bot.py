@@ -8,6 +8,24 @@ import requests
 import base64
 import random
 
+# ---- Fake web server ----
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+PORT = int(os.environ.get("PORT", 8000))
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+
+def run_web():
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
+    server.serve_forever()
+
+threading.Thread(target=run_web, daemon=True).start()
+
 # ---------- ENV ----------
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
