@@ -104,7 +104,7 @@ def deploy_to_render(bot_id, repo_url, token):
         "repo": repo_url,
         "branch": "main",
         "runtime": "python",
-        "buildCommand": "pip install -r requirements.txt",
+        "buildCommand": "pip install --upgrade pip & pip install -r requirements.txt & pip install -U discord.py",
         "startCommand": "python bot.py",
         "envVars": [{"key": "BOT_TOKEN", "value": token}]
     }
@@ -228,18 +228,25 @@ class Menu(View):
 async def getstarted(interaction):
     await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
 
-@bot.tree.command(name="mybots")
-async def mybots(interaction):
-    user_id = interaction.user.id
+@bot.tree.command(name="help", description="List all Dots MGR commands")
+async def help_command(interaction: discord.Interaction):
+    prefix_cmds = [
+        f"{bot.command_prefix}{c.name} - {c.help or 'No description'}"
+        for c in bot.commands
+    ]
 
-    bots = [(bid, d) for bid, d in bots_data.items() if d["owner"] == user_id]
+    slash_cmds = [
+        f"/{c.name} - {c.description or 'No description'}"
+        for c in bot.tree.get_commands()
+    ]
 
-    if not bots:
-        return await interaction.response.send_message("No bots.", ephemeral=True)
+    msg = "**📦 Dots MGR Commands**\n\n"
 
-    msg = ""
-    for bid, d in bots:
-        msg += f"ID {bid} | {d['name']} | {d['status']}\n"
+    if prefix_cmds:
+        msg += "**Prefix commands:**\n" + "\n".join(prefix_cmds) + "\n\n"
+
+    if slash_cmds:
+        msg += "**Slash commands:**\n" + "\n".join(slash_cmds)
 
     await interaction.response.send_message(msg, ephemeral=True)
 
