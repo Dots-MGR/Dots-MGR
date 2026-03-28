@@ -348,11 +348,11 @@ class Menu(View):
         await interaction.response.send_modal(DeleteBotModal())
 
 # ---------- COMMANDS ----------
-@bot.tree.command(name="getstarted")
+@bot.tree.command(name="getstarted", description="Use this to show the menu!")
 async def getstarted(interaction):
     await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
 
-@bot.tree.command(name="cmds")
+@bot.tree.command(name="cmds", description="Add, remove or modify a hosted bots commands!")
 async def cmds(interaction):
     owned = [b for b in bots_data.values() if b["owner"] == interaction.user.id]
     if not owned:
@@ -360,7 +360,7 @@ async def cmds(interaction):
 
     await interaction.response.send_modal(CommandModal())
 
-@bot.tree.command(name="help")
+@bot.tree.command(name="help", description="Lists all commands!")
 async def help_command(interaction):
     cmds = [f"/{c.name}" for c in bot.tree.get_commands()]
     await interaction.response.send_message("\n".join(cmds), ephemeral=True)
