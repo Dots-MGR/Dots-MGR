@@ -1,24 +1,23 @@
 import os
 import discord
 from discord.ext import commands
-from discord.ui import View, Modal, TextInput
+from discord.ui import View, Modal, TextInput, Select
 import json
 import hashlib
 import requests
 import base64
+import random
 
-port = int(os.environ.get("PORT", 8000))
-
+# ---------- ENV ----------
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
 
 GITHUB_ORG = "Dots-MGR"
 TEMPLATE_REPO = "bot-template"
-
 ADMIN_ID = 837680779072110593
 
-# ✅ FIX: message content intent
+# ---------- INTENTS FIX ----------
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -120,14 +119,21 @@ def delete_render(bot_id):
         headers={"Authorization": f"Bearer {RENDER_API_KEY}"}
     )
 
-# ---------- MODALS ----------
+# ---------- AI ----------
+def generate_ai_command(idea):
+    return random.choice([
+        f"{idea}? That's interesting 🤔",
+        f"I think {idea} is awesome 😎",
+        f"{idea.upper()}!!! 🔥",
+        f"Why {idea}? 😂"
+    ])
 
-# ✅ FIXED FORM (matches your spec)
+# ---------- MODALS ----------
 class NewBotModal(Modal, title="New bot form"):
     name = TextInput(label="Bot name", min_length=2, max_length=32, placeholder="A discord bot")
     desc = TextInput(label="Bot description", style=discord.TextStyle.paragraph, max_length=400, placeholder="I'm friendly!")
-    tags = TextInput(label="Bot tags (comma separated)", required=False, placeholder="fun, helpful")
-    password = TextInput(label="Access password", min_length=8, max_length=100, placeholder="12345678")
+    tags = TextInput(label="Tags", required=False, placeholder="fun, helpful")
+    password = TextInput(label="Password", min_length=8, max_length=100, placeholder="12345678")
 
     async def on_submit(self, interaction):
         global bot_counter
@@ -136,7 +142,7 @@ class NewBotModal(Modal, title="New bot form"):
 
         free = get_free_bot()
         if not free:
-            return await interaction.response.send_message("❌ No bots available", ephemeral=True)
+            return await interaction.response.send_message("❌ No bots", ephemeral=True)
 
         bots_data[bid] = {
             "name": self.name.value,
@@ -156,11 +162,11 @@ class NewBotModal(Modal, title="New bot form"):
 
         await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
 
-# ---------- COMMAND SYSTEM ----------
 class CommandModal(Modal, title="Add Command"):
     bot_id = TextInput(label="BotID")
     password = TextInput(label="Password")
     cmd = TextInput(label="Command (!hi Hello)")
+    category = TextInput(label="Category", required=False)
 
     async def on_submit(self, interaction):
         bid = self.bot_id.value
@@ -171,16 +177,16 @@ class CommandModal(Modal, title="Add Command"):
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
 
-        try:
-            trigger, response = self.cmd.value.split(" ", 1)
-        except:
-            return await interaction.response.send_message("❌ Format: !cmd text", ephemeral=True)
+        trigger, response = self.cmd.value.split(" ", 1)
 
         repo = f"dots-bot-{bid}"
         config, sha = get_config(repo)
 
         config.setdefault("commands", {})
-        config["commands"][trigger.lower()] = response
+        config["commands"][trigger.lower()] = {
+            "response": response,
+            "category": self.category.value or "other"
+        }
 
         update_config(repo, config, sha)
         redeploy(bid)
@@ -191,7 +197,7 @@ class CommandModal(Modal, title="Add Command"):
             view=CommandView(bid, trigger)
         )
 
-# ---------- COMMAND EDIT / DELETE ----------
+# ---------- COMMAND EDIT ----------
 class CommandView(View):
     def __init__(self, bot_id, trigger):
         super().__init__(timeout=None)
@@ -226,12 +232,38 @@ class EditCommandModal(Modal, title="Edit Command"):
         repo = f"dots-bot-{self.bot_id}"
         config, sha = get_config(repo)
 
-        config["commands"][self.trigger] = self.new_text.value
+        config["commands"][self.trigger]["response"] = self.new_text.value
 
         update_config(repo, config, sha)
         redeploy(self.bot_id)
 
         await interaction.response.send_message("✅ Updated!", ephemeral=True)
+
+# ---------- CMD LIST ----------
+class BotSelect(Select):
+    def __init__(self, user_id):
+        options = [
+            discord.SelectOption(label=f"{b['name']} (ID: {bid})", value=bid)
+            for bid, b in bots_data.items() if b["owner"] == user_id
+        ]
+        super().__init__(placeholder="Select bot", options=options)
+
+    async def callback(self, interaction):
+        bid = self.values[0]
+        config, _ = get_config(f"dots-bot-{bid}")
+
+        cmds = config.get("commands", {})
+
+        msg = ""
+        for k, v in cmds.items():
+            msg += f"{k} → {v['response']}\n"
+
+        await interaction.response.send_message(msg or "No commands", ephemeral=True)
+
+class BotSelectView(View):
+    def __init__(self, user_id):
+        super().__init__()
+        self.add_item(BotSelect(user_id))
 
 # ---------- DELETE BOT ----------
 class DeleteBotModal(Modal, title="Delete Bot"):
@@ -240,9 +272,6 @@ class DeleteBotModal(Modal, title="Delete Bot"):
 
     async def on_submit(self, interaction):
         bid = self.bot_id.value
-
-        if bid not in bots_data:
-            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
 
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
@@ -257,7 +286,7 @@ class DeleteBotModal(Modal, title="Delete Bot"):
         del bots_data[bid]
         save()
 
-        await interaction.response.send_message("🗑️ Fully deleted!", ephemeral=True)
+        await interaction.response.send_message("🗑️ Deleted!", ephemeral=True)
 
 # ---------- DEPLOY ----------
 class DoneView(View):
@@ -272,20 +301,58 @@ class DoneView(View):
 
         repo = create_repo_from_template(bid)
 
-        update_config(f"dots-bot-{bid}", {
-            "name": data["name"],
-            "prefix": "!",
-            "commands": {}
-        }, sha=None)
-
         deploy(bid, repo, data["token"])
 
         data["status"] = "live"
         save()
 
         await bot.tree.sync()
-
         await interaction.response.send_message("✅ LIVE!", ephemeral=True)
+
+# ---------- COMMANDS ----------
+@bot.tree.command(name="getstarted")
+async def getstarted(interaction):
+    await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
+
+@bot.tree.command(name="cmds")
+async def cmds(interaction):
+    await interaction.response.send_modal(CommandModal())
+
+@bot.tree.command(name="cmdlist")
+async def cmdlist(interaction):
+    await interaction.response.send_message("Select:", view=BotSelectView(interaction.user.id), ephemeral=True)
+
+@bot.tree.command(name="aicmd")
+async def aicmd(interaction):
+    class AIModal(Modal, title="AI Command"):
+        bot_id = TextInput(label="BotID")
+        password = TextInput(label="Password")
+        trigger = TextInput(label="Trigger")
+        idea = TextInput(label="Idea")
+
+        async def on_submit(self, interaction):
+            bid = self.bot_id.value
+
+            if bots_data[bid]["password"] != hash_password(self.password.value):
+                return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
+
+            response = generate_ai_command(self.idea.value)
+
+            repo = f"dots-bot-{bid}"
+            config, sha = get_config(repo)
+
+            config.setdefault("commands", {})
+            config["commands"][self.trigger.value.lower()] = {
+                "response": response,
+                "category": "ai"
+            }
+
+            update_config(repo, config, sha)
+            redeploy(bid)
+
+            await interaction.response.send_message(f"🤖 {response}", ephemeral=True)
+
+    await interaction.response.send_modal(AIModal())
 
 # ---------- MENU ----------
 class Menu(View):
@@ -299,15 +366,6 @@ class Menu(View):
     @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
     async def delete(self, interaction, button):
         await interaction.response.send_modal(DeleteBotModal())
-
-# ---------- COMMANDS ----------
-@bot.tree.command(name="getstarted")
-async def getstarted(interaction):
-    await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
-
-@bot.tree.command(name="cmds")
-async def cmds(interaction):
-    await interaction.response.send_modal(CommandModal())
 
 # ---------- READY ----------
 @bot.event
