@@ -105,7 +105,7 @@ def deploy_to_render(bot_id, repo_url, token):
         "repo": repo_url,
         "branch": "main",
         "runtime": "python",
-        "buildCommand": "pip install -r requirements.txt",
+        "buildCommand": "pip install --upgrade pip & pip install -r requirements.txt & pip install -U discord.py",
         "startCommand": "python bot.py",
         "envVars": [{"key": "BOT_TOKEN", "value": token}]
     }
