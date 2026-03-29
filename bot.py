@@ -117,21 +117,36 @@ def deploy(bot_id, repo, token):
         },
         json={
             "type": "web_service",
-            "name": f"dots-bot-{bot_id}",
-            "repo": repo,
-            "branch": "main",
-
-            "runtime": "python",
-            "plan": "free",
-            "region": "ohio",
             "autoDeploy": "yes",
-
-            "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt",
-            "startCommand": "python bot.py",
-
-            "envVars": [
-                {"key": "BOT_TOKEN", "value": token}
-            ]
+            "serviceDetails": {
+                "autoscaling": {
+                    "enabled": False,
+                    "criteria": {
+                        "cpu": { "enabled": False },
+                        "memory": { "enabled": False }
+                    }
+            },
+            "runtime": "python",
+            "envSpecificDetails": {
+                "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt && pip install -U discord.py",
+                "startCommand": "python bot.py"
+            },
+            "maintenanceMode": { "enabled": False },
+            "plan": "free",
+            "pullRequestPreviewsEnabled": "no",
+            "previews": { "generation": "off" },
+            "region": "ohio"
+        },
+        "branch": "main",
+        "envVars": [
+            {
+                "key": "BOT_TOKEN",
+                "value": token
+            }
+        ],
+        "repo": repo,
+        "name": f"dots-bot-{bot_id}",
+        "ownerId": "tea-d73btg7gi27c73d28i40"
         }
     )
 
