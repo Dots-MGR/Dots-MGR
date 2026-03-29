@@ -36,7 +36,7 @@ statuses = itertools.cycle([
     ("listening", "How to manage Bots"),
     ("competing", "Dev0630's toolbox!"),
     ("watching", "Bot uptime and status"),
-    ("listening", "User's commands"),
+    ("listening", "f"{len(bot.users)} users commands"),
     ("playing", "With Python and APIs"),
 ])
 
