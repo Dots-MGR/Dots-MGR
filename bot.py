@@ -129,13 +129,25 @@ def create_repo_from_template(bot_id):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{TEMPLATE_REPO}/generate"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
-    r = requests.post(url, headers=headers, json={
+    data = {
         "owner": GITHUB_ORG,
         "name": f"dots-bot-{bot_id}",
         "private": True
-    })
+    }
 
-    return r.json()["html_url"] if r.status_code in [200, 201] else None
+    r = requests.post(url, headers=headers, json=data)
+
+    print("GITHUB STATUS:", r.status_code)
+    print("GITHUB RESPONSE:", r.text)
+
+    if r.status_code in [200, 201]:
+        try:
+            return r.json().get("html_url")
+        except:
+            return f"https://github.com/{GITHUB_ORG}/dots-bot-{bot_id}"
+
+    # 🔥 fallback (repo már lehet létezik!)
+    return f"https://github.com/{GITHUB_ORG}/dots-bot-{bot_id}"
 
 def get_config(repo):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
