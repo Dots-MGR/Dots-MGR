@@ -437,34 +437,34 @@ class DoneView(View):
         self.bot_id = bot_id
 
     @discord.ui.button(label="Deploy", style=discord.ButtonStyle.success)
-async def done(self, interaction, button):
-    await interaction.response.defer(ephemeral=True)  # 🔥 EZ A FIX
+    async def done(self, interaction, button):
+        await interaction.response.defer(ephemeral=True)  # 🔥 EZ A FIX
 
-    try:
-        bid = str(self.bot_id)
+        try:
+            bid = str(self.bot_id)
 
-        if bid not in bots_data:
-            return await interaction.followup.send("❌ Bot not found!", ephemeral=True)
+            if bid not in bots_data:
+                return await interaction.followup.send("❌ Bot not found!", ephemeral=True)
 
-        data = bots_data[bid]
+            data = bots_data[bid]
 
-        # GitHub repo
-        repo = create_repo_from_template(bid)
-        if not repo:
-            return await interaction.followup.send("❌ Repo creation failed!", ephemeral=True)
+            # GitHub repo
+            repo = create_repo_from_template(bid)
+            if not repo:
+                return await interaction.followup.send("❌ Repo creation failed!", ephemeral=True)
 
-        # Render deploy
-        deploy(bid, repo, data["token"])
+            # Render deploy
+            deploy(bid, repo, data["token"])
 
-        data["status"] = "live"
-        save()
+            data["status"] = "live"
+            save()
 
-        await bot.tree.sync()
+            await bot.tree.sync()
 
-        await interaction.followup.send("✅ Bot deployed successfully!", ephemeral=True)
+            await interaction.followup.send("✅ Bot deployed successfully!", ephemeral=True)
 
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
 
 # ---------- COMMANDS ----------
 @bot.tree.command(name="getstarted", description="Opens the main menu")
