@@ -621,9 +621,10 @@ async def poolbot(interaction: discord.Interaction, bot_id: str):
         return await interaction.response.send_message("❌ Can't use command!", ephemeral=True)
 
     # 🔍 keresés pool-ban
-    for b in available_bots:
-        if str(b["client_id"]) == str(bot_id):
-
+    if bot_id in bots_data:
+        b = next((x for x in available_bots if x["client_id"] == bots_data[bot_id]["client_id"]), None)
+        if b:
+            # reset, delete, etc.
             # 🔥 Render törlés
             delete_render(bot_id)
 
