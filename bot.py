@@ -198,10 +198,10 @@ def deploy(bot_id, repo, token):
         }
     )
 
-    print("========== RENDER DEBUG ==========")
-    print("STATUS:", r.status_code)
-    print("BODY:", r.text)
-    print("==================================")
+    log("========== RENDER DEBUG ==========")
+    log("STATUS:", r.status_code)
+    log("BODY:", r.text)
+    log("==================================")
 
 def redeploy(bot_id):
     requests.post(
@@ -400,7 +400,7 @@ def release_bot(client_id):
     for b in available_bots:
         if str(b["client_id"]) == str(client_id):
             b["used"] = False
-            print(f"🔓 Bot {client_id} released back to pool")
+            log(f"🔓 Bot {client_id} released back to pool")
             return
 
 class DeleteBotModal(Modal, title="Delete Bot"):
@@ -557,6 +557,6 @@ async def on_ready():
     if not status_loop.is_running():
         status_loop.start()
 
-    print("READY")
+    log("READY")
 
 bot.run(DISCORD_TOKEN)
