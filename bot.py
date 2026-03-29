@@ -168,7 +168,7 @@ def update_config(repo, config, sha):
     })
 
 def create_issue(repo_name, title, body):
-    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/issues"
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bot_id}/issues"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
 
     data = {
