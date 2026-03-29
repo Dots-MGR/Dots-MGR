@@ -98,6 +98,8 @@ def load():
     except:
         pass
 
+load()  # before any modal or command that accesses bots_data
+
 def get_free_bot():
     for b in available_bots:
         if not b["used"] and b["token"]:
