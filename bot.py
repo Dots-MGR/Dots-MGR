@@ -180,6 +180,26 @@ class NewBotModal(Modal, title="New bot form"):
 
         await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
 
+class EditBotModal(Modal, title="Edit Bot"):
+    bot_id = TextInput(label="BotID")
+    password = TextInput(label="Password")
+    name = TextInput(label="New name", required=False)
+
+    async def on_submit(self, interaction):
+        bid = self.bot_id.value
+
+        if bid not in bots_data:
+            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
+
+        if bots_data[bid]["password"] != hash_password(self.password.value):
+            return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
+
+        if self.name.value:
+            bots_data[bid]["name"] = self.name.value
+
+        save()
+        await interaction.response.send_message("✅ Updated!", ephemeral=True)
+
 class CommandModal(Modal, title="Add Command"):
     bot_id = TextInput(label="BotID")
     password = TextInput(label="Password")
@@ -267,16 +287,27 @@ class BotSelect(Select):
         super().__init__(placeholder="Select bot", options=options)
 
     async def callback(self, interaction):
-        bid = self.values[0]
-        config, _ = get_config(f"dots-bot-{bid}")
+    bid = self.values[0]
+    config, _ = get_config(f"dots-bot-{bid}")
 
-        cmds = config.get("commands", {})
+    cmds = config.get("commands", {})
 
-        msg = ""
-        for k, v in cmds.items():
-            msg += f"{k} → {v['response']}\n"
+    if not cmds:
+        return await interaction.response.send_message("❌ No commands", ephemeral=True)
 
-        await interaction.response.send_message(msg or "No commands", ephemeral=True)
+    categories = {}
+
+    for name, data in cmds.items():
+        cat = data.get("category", "other")
+        categories.setdefault(cat, []).append((name, data["response"]))
+
+    msg = ""
+    for cat, items in categories.items():
+        msg += f"\n📁 {cat.upper()}\n"
+        for name, resp in items:
+            msg += f"• {name} → {resp}\n"
+
+    await interaction.response.send_message(msg, ephemeral=True)
 
 class BotSelectView(View):
     def __init__(self, user_id):
@@ -328,19 +359,24 @@ class DoneView(View):
         await interaction.response.send_message("✅ LIVE!", ephemeral=True)
 
 # ---------- COMMANDS ----------
-@bot.tree.command(name="getstarted")
+@bot.tree.command(name="getstarted", description="Opens the main menu")
 async def getstarted(interaction):
     await interaction.response.send_message("Menu:", view=Menu(), ephemeral=True)
 
-@bot.tree.command(name="cmds")
+@bot.tree.command(name="help", description="Lists all Dots MGR commands")
+async def help_command(interaction):
+    cmds = [f"/{c.name} - {c.description}" for c in bot.tree.get_commands()]
+    await interaction.response.send_message("\n".join(cmds), ephemeral=True)
+
+@bot.tree.command(name="cmds", description="Create a new command for your bot")
 async def cmds(interaction):
     await interaction.response.send_modal(CommandModal())
 
-@bot.tree.command(name="cmdlist")
+@bot.tree.command(name="cmdlist", description="View your bots commands")
 async def cmdlist(interaction):
     await interaction.response.send_message("Select:", view=BotSelectView(interaction.user.id), ephemeral=True)
 
-@bot.tree.command(name="aicmd")
+@bot.tree.command(name="aicmd", description="Generate a command using AI")
 async def aicmd(interaction):
     class AIModal(Modal, title="AI Command"):
         bot_id = TextInput(label="BotID")
@@ -380,6 +416,10 @@ class Menu(View):
     @discord.ui.button(label="New Bot", style=discord.ButtonStyle.success)
     async def new(self, interaction, button):
         await interaction.response.send_modal(NewBotModal())
+
+    @discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
+    async def edit(self, interaction, button):
+        await interaction.response.send_modal(EditBotModal())
 
     @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
     async def delete(self, interaction, button):
