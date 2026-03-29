@@ -211,8 +211,8 @@ def deploy(bot_id, repo, token):
     )
 
     log("========== RENDER DEBUG ==========")
-    log("STATUS:" r.status_code)
-    log("BODY:" r.text)
+    log(f"STATUS: {r.status_code}")
+    log(f"BODY: {r.text}")
     log("==================================")
 
 def redeploy(bot_id):
