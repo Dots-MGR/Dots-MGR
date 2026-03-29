@@ -48,8 +48,8 @@ bot_counter = 0
 
 # ---------- BOT POOL ----------
 available_bots = [
-    {"token": os.environ.get("BOT_TOKEN_1"), "client_id": os.environ.get("BOT_CLIENT_ID_1"), "used": False},
-    {"token": os.environ.get("BOT_TOKEN_2"), "client_id": os.environ.get("BOT_CLIENT_ID_2"), "used": False},
+    {"token": os.environ.get("BOT_TOKEN_1"), "used": False},
+    {"token": os.environ.get("BOT_TOKEN_2"), "used": False},
 ]
 
 # ---------- UTILS ----------
@@ -169,7 +169,6 @@ class NewBotModal(Modal, title="New bot form"):
             "password": hash_password(self.password.value),
             "owner": interaction.user.id,
             "token": free["token"],
-            "client_id": free["client_id"],
             "status": "pending"
         }
 
