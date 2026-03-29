@@ -35,9 +35,10 @@ statuses = itertools.cycle([
     ("watching", "How to be the best Discord Bot"),
     ("listening", "How to manage Bots"),
     ("competing", "Dev0630's toolbox!"),
+    
     ("watching", "Bot uptime and status"),
     ("listening", "f"{len(bot.users)} users commands"),
-    ("playing", "With Python and APIs"),
+    ("playing", "With Python and APIs")
 ])
 
 @tasks.loop(seconds=12)
