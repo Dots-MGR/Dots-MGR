@@ -344,10 +344,18 @@ class DeleteBotModal(Modal, title="Delete Bot"):
             headers={"Authorization": f"token {GITHUB_TOKEN}"}
         )
 
+        release_bot(bid)
         del bots_data[bid]
         save()
 
         await interaction.response.send_message("🗑️ Deleted!", ephemeral=True)
+
+def release_bot(client_id):
+    for b in available_bots:
+        if str(b["client_id"]) == str(client_id):
+            b["used"] = False
+            print(f"🔓 Bot {client_id} released back to pool")
+            return
 
 # ---------- DEPLOY ----------
 class DoneView(View):
