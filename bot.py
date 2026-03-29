@@ -137,8 +137,8 @@ def create_repo_from_template(bot_id):
 
     r = requests.post(url, headers=headers, json=data)
 
-    print("GITHUB STATUS:", r.status_code)
-    print("GITHUB RESPONSE:", r.text)
+    log("GITHUB STATUS:", r.status_code)
+    log("GITHUB RESPONSE:", r.text)
 
     if r.status_code in [200, 201]:
         try:
