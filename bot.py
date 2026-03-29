@@ -109,19 +109,30 @@ def update_config(repo, config, sha):
 
 # ---------- RENDER ----------
 def deploy(bot_id, repo, token):
-    requests.post(
+    r = requests.post(
         "https://api.render.com/v1/services",
         headers={"Authorization": f"Bearer {RENDER_API_KEY}"},
         json={
             "type": "web_service",
             "name": f"dots-bot-{bot_id}",
             "repo": repo,
+            "branch": "main",
             "runtime": "python",
-            "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt && pip install -U discord.py",
+
+            # 🔥 EZ KELL A FREE PLANHOZ
+            "plan": "free",
+
+            "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt",
             "startCommand": "python bot.py",
-            "envVars": [{"key": "BOT_TOKEN", "value": token}]
+
+            "envVars": [
+                {"key": "BOT_TOKEN", "value": token}
+            ]
         }
     )
+
+    print("STATUS:", r.status_code)
+    print("RESPONSE:", r.text)
 
 def redeploy(bot_id):
     requests.post(
