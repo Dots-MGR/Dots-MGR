@@ -8,22 +8,38 @@ import requests
 import base64
 import random
 import itertools
-
-# ---- Fake web server ----
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import Flask, jsonify
+import threading
+import datetime
 
-PORT = int(os.environ.get("PORT", 8000))
+app = Flask(__name__)
+logs = []
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is alive!")
+def log(msg):
+    time = datetime.datetime.now().strftime("%H:%M:%S")
+    entry = f"[{time}] {msg}"
+    print(entry)
+    logs.append(entry)
+
+    # limit log méret (ne zabálja a RAM-ot)
+    if len(logs) > 200:
+        logs.pop(0)
+
+@app.route("/")
+def home():
+    return """
+    <h1>🚧 Coming soon: Web Dashboard</h1>
+    <p>This will be the control panel for your bots.</p>
+    """
+
+@app.route("/logs")
+def get_logs():
+    return "<br>".join(logs)
 
 def run_web():
-    server = HTTPServer(("0.0.0.0", PORT), Handler)
-    server.serve_forever()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
 
 threading.Thread(target=run_web, daemon=True).start()
 
