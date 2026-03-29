@@ -119,7 +119,7 @@ def deploy(bot_id, repo, token):
             "name": f"dots-bot-{bot_id}",
             "repo": repo,
             "runtime": "python",
-            "buildCommand": "pip install -r requirements.txt",
+            "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt && pip install -U discord.py",
             "startCommand": "python bot.py",
             "envVars": [{"key": "BOT_TOKEN", "value": token}]
         }
