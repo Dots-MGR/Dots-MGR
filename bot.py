@@ -183,57 +183,59 @@ def create_issue(repo_name, title, body):
 
 # ---------- RENDER ----------
 def deploy(bot_id, repo, token):
-    r = requests.post(
-        "https://api.render.com/v1/services",
-        headers={
-            "Authorization": f"Bearer {RENDER_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "type": "web_service",
-            "autoDeploy": "yes",
-            "serviceDetails": {
-                "autoscaling": {
-                    "enabled": False,
-                    "criteria": {
-                        "cpu": { "enabled": False },
-                        "memory": { "enabled": False }
-                    }
+    payload = {
+        "type": "web_service",
+        "autoDeploy": "yes",
+        "serviceDetails": {
+            "autoscaling": {
+                "enabled": False,
+                "criteria": {
+                    "cpu": {"enabled": False},
+                    "memory": {"enabled": False}
+                }
             },
             "runtime": "python",
             "envSpecificDetails": {
                 "buildCommand": "pip install --upgrade pip && pip install -r requirements.txt && pip install -U discord.py",
                 "startCommand": "python bot.py"
             },
-            "maintenanceMode": { "enabled": False },
+            "maintenanceMode": {"enabled": False},
             "plan": "free",
             "pullRequestPreviewsEnabled": "no",
-            "previews": { "generation": "off" },
+            "previews": {"generation": "off"},
             "region": "ohio"
         },
         "branch": "main",
         "envVars": [
-            {
-                "key": "BOT_TOKEN",
-                "value": token
-            }
+            {"key": "BOT_TOKEN", "value": token}
         ],
         "repo": repo,
         "name": f"dots-bot-{bot_id}",
         "ownerId": "tea-d73btg7gi27c73d28i40"
-        }
-        if r.status_code in [200, 201]:
-            # Save the Render service ID in bots_data
-            bots_data[bot_id]["render_service_id"] = data["id"]
-            save()
-            return True
-        return False
+    }
+
+    r = requests.post(
+        "https://api.render.com/v1/services",
+        headers={
+            "Authorization": f"Bearer {RENDER_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json=payload
     )
 
     log("========== RENDER DEBUG ==========")
     log(f"STATUS: {r.status_code}")
     log(f"BODY: {r.text}")
     log("==================================")
+
+    if r.status_code in [200, 201]:
+        # Save the Render service ID in bots_data
+        data = r.json()
+        bots_data[bot_id]["render_service_id"] = data["id"]
+        save()
+        return True
+
+    return False
 
 def redeploy(bot_id):
     requests.post(
