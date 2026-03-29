@@ -287,27 +287,27 @@ class BotSelect(Select):
         super().__init__(placeholder="Select bot", options=options)
 
     async def callback(self, interaction):
-    bid = self.values[0]
-    config, _ = get_config(f"dots-bot-{bid}")
+        bid = self.values[0]
+        config, _ = get_config(f"dots-bot-{bid}")
 
-    cmds = config.get("commands", {})
+        cmds = config.get("commands", {})
 
-    if not cmds:
-        return await interaction.response.send_message("❌ No commands", ephemeral=True)
+        if not cmds:
+            return await interaction.response.send_message("❌ No commands", ephemeral=True)
 
-    categories = {}
+        categories = {}
 
-    for name, data in cmds.items():
-        cat = data.get("category", "other")
-        categories.setdefault(cat, []).append((name, data["response"]))
+        for name, data in cmds.items():
+            cat = data.get("category", "other")
+            categories.setdefault(cat, []).append((name, data["response"]))
 
-    msg = ""
-    for cat, items in categories.items():
-        msg += f"\n📁 {cat.upper()}\n"
-        for name, resp in items:
-            msg += f"• {name} → {resp}\n"
+        msg = ""
+        for cat, items in categories.items():
+            msg += f"\n📁 {cat.upper()}\n"
+            for name, resp in items:
+                msg += f"• {name} → {resp}\n"
 
-    await interaction.response.send_message(msg, ephemeral=True)
+        await interaction.response.send_message(msg, ephemeral=True)
 
 class BotSelectView(View):
     def __init__(self, user_id):
