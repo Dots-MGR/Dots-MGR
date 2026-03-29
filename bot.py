@@ -1,12 +1,13 @@
 import os
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ui import View, Modal, TextInput, Select
 import json
 import hashlib
 import requests
 import base64
 import random
+import itertools
 
 # ---- Fake web server ----
 import threading
@@ -25,39 +26,6 @@ def run_web():
     server.serve_forever()
 
 threading.Thread(target=run_web, daemon=True).start()
-
-# ------- Statuses -------
-from discord.ext import tasks
-import itertools
-
-statuses = itertools.cycle([
-    ("playing", "Running some Bots!"),
-    ("watching", "How to be the best Discord Bot"),
-    ("listening", "How to manage Bots"),
-    ("competing", "Dev0630's toolbox!"),
-    
-    ("watching", "Bot uptime and status"),
-    ("listening", f"{len(bot.users)} users commands"),
-    ("playing", "With Python and APIs")
-])
-
-@tasks.loop(seconds=12)
-async def status_loop():
-    status_type, text = next(statuses)
-
-    if status_type == "playing":
-        activity = discord.Game(name=text)
-
-    elif status_type == "watching":
-        activity = discord.Activity(type=discord.ActivityType.watching, name=text)
-
-    elif status_type == "listening":
-        activity = discord.Activity(type=discord.ActivityType.listening, name=text)
-
-    elif status_type == "competing":
-        activity = discord.Activity(type=discord.ActivityType.competing, name=text)
-
-    await bot.change_presence(activity=activity)
 
 # ---------- ENV ----------
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -84,6 +52,18 @@ available_bots = [
     {"token": os.environ.get("BOT_TOKEN_2"), "client_id": os.environ.get("BOT_CLIENT_ID_2"), "used": False},
 ]
 
+# ------- Statuses -------
+statuses = itertools.cycle([
+    ("playing", "Running some Bots!"),
+    ("watching", "How to be the best Discord Bot"),
+    ("listening", "How to manage Bots"),
+    ("competing", "Dev0630's toolbox!"),
+    
+    ("watching", "Bot uptime and status"),
+    ("listening", f"{len(bot.users)} users commands"),
+    ("playing", "With Python and APIs")
+])
+
 # ---------- UTILS ----------
 def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
@@ -108,6 +88,25 @@ def get_free_bot():
             b["used"] = True
             return b
     return None
+
+# ---------- Loop ----------
+@tasks.loop(seconds=12)
+async def status_loop():
+    status_type, text = next(statuses)
+
+    if status_type == "playing":
+        activity = discord.Game(name=text)
+
+    elif status_type == "watching":
+        activity = discord.Activity(type=discord.ActivityType.watching, name=text)
+
+    elif status_type == "listening":
+        activity = discord.Activity(type=discord.ActivityType.listening, name=text)
+
+    elif status_type == "competing":
+        activity = discord.Activity(type=discord.ActivityType.competing, name=text)
+
+    await bot.change_presence(activity=activity)
 
 # ---------- GITHUB ----------
 def create_repo_from_template(bot_id):
