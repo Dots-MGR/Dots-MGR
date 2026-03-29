@@ -436,6 +436,11 @@ async def poolbot(interaction: discord.Interaction, bot_id: str):
     # 🔍 keresés pool-ban
     for b in available_bots:
         if str(b["client_id"]) == str(bot_id):
+            delete_render(bid)
+            requests.delete(
+                f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bid}",
+                headers={"Authorization": f"token {GITHUB_TOKEN}"}
+            )
             b["used"] = False
             save()
             return await interaction.response.send_message(f"🔓 Bot {bot_id} released!", ephemeral=True)
