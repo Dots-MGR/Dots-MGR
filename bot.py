@@ -222,12 +222,12 @@ def deploy(bot_id, repo, token):
         "name": f"dots-bot-{bot_id}",
         "ownerId": "tea-d73btg7gi27c73d28i40"
         }
-    if r.status_code in [200, 201]:
-        # Save the Render service ID in bots_data
-        bots_data[bot_id]["render_service_id"] = data["id"]
-        save()
-        return True
-    return False
+        if r.status_code in [200, 201]:
+            # Save the Render service ID in bots_data
+            bots_data[bot_id]["render_service_id"] = data["id"]
+            save()
+            return True
+        return False
     )
 
     log("========== RENDER DEBUG ==========")
