@@ -427,6 +427,21 @@ async def aicmd(interaction):
 
     await interaction.response.send_modal(AIModal())
 
+@bot.tree.command(name="poolbot")
+async def poolbot(interaction: discord.Interaction, bot_id: str):
+    # 🔒 access check
+    if interaction.user.id != 837680779072110593:
+        return await interaction.response.send_message("❌ Can't use command!", ephemeral=True)
+
+    # 🔍 keresés pool-ban
+    for b in available_bots:
+        if str(b["client_id"]) == str(bot_id):
+            b["used"] = False
+            save()
+            return await interaction.response.send_message(f"🔓 Bot {bot_id} resetelve!", ephemeral=True)
+
+    await interaction.response.send_message("❌ Bot not found in pool!", ephemeral=True)
+
 # ---------- MENU ----------
 class Menu(View):
     def __init__(self):
