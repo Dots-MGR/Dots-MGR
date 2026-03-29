@@ -44,7 +44,6 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 DATA_FILE = "data.json"
 
 bots_data = {}
-bot_counter = 0
 
 # ---------- BOT POOL ----------
 available_bots = [
@@ -58,15 +57,14 @@ def hash_password(pw):
 
 def save():
     with open(DATA_FILE, "w") as f:
-        json.dump({"bots": bots_data, "counter": bot_counter, "pool": available_bots}, f, indent=2)
+        json.dump({"bots": bots_data, "pool": available_bots}, f, indent=2)
 
 def load():
-    global bots_data, bot_counter, available_bots
+    global bots_data, available_bots
     try:
         with open(DATA_FILE) as f:
             data = json.load(f)
             bots_data = data["bots"]
-            bot_counter = data["counter"]
             available_bots = data["pool"]
     except:
         pass
@@ -155,8 +153,11 @@ class NewBotModal(Modal, title="New bot form"):
 
     async def on_submit(self, interaction):
         global bot_counter
-        bot_counter += 1
-        bid = str(bot_counter)
+        free = get_free_bot()
+        if not free:
+            return await interaction.response.send_message("❌ No bots", ephemeral=True)
+
+        bid = str(free["client_id"])  # 🔥 EZ AZ APP ID
 
         free = get_free_bot()
         if not free:
