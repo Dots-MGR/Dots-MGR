@@ -347,8 +347,13 @@ class DeleteBotModal(Modal, title="Delete Bot"):
     async def on_submit(self, interaction):
         bid = self.bot_id.value
 
+        if bid not in bots_data:
+            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
+
         if bots_data[bid]["password"] != hash_password(self.password.value):
             return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
+
+        # proceed with deletion
 
         delete_render(bid)
 
