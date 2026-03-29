@@ -270,7 +270,6 @@ class NewBotModal(Modal, title="New bot form"):
     password = TextInput(label="Password", min_length=8, max_length=100, placeholder="12345678")
 
     async def on_submit(self, interaction):
-        global bot_counter
         free = get_free_bot()
         if not free:
             return await interaction.response.send_message("❌ No bots", ephemeral=True)
@@ -306,7 +305,10 @@ class NewBotModal(Modal, title="New bot form"):
         )
 
         admin = await bot.fetch_user(ADMIN_ID)
-        await admin.send(embed=discord.Embed(title=f"Deploy {bid}"), view=DoneView(bid))
+        try:
+            await admin.send(embed=discord.Embed(title=f"Deploy {bid}"), view=DoneView(bid))
+        except Exception as e:
+            log(f"Failed to DM admin: {e}")
 
         await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
 
