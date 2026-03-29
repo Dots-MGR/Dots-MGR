@@ -438,7 +438,7 @@ async def poolbot(interaction: discord.Interaction, bot_id: str):
         if str(b["client_id"]) == str(bot_id):
             b["used"] = False
             save()
-            return await interaction.response.send_message(f"🔓 Bot {bot_id} resetelve!", ephemeral=True)
+            return await interaction.response.send_message(f"🔓 Bot {bot_id} released!", ephemeral=True)
 
     await interaction.response.send_message("❌ Bot not found in pool!", ephemeral=True)
 
