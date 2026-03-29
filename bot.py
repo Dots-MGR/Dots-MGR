@@ -167,6 +167,20 @@ def update_config(repo, config, sha):
         "sha": sha
     })
 
+def create_issue(repo_name, title, body):
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/issues"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+
+    data = {
+        "title": title,
+        "body": body
+    }
+
+    r = requests.post(url, headers=headers, json=data)
+
+    log(f"ISSUE STATUS: {r.status_code}")
+    log(f"ISSUE RESPONSE: {r.text}")
+
 # ---------- RENDER ----------
 def deploy(bot_id, repo, token):
     r = requests.post(
@@ -268,30 +282,62 @@ class NewBotModal(Modal, title="New bot form"):
 
         save()
 
+        repo = f"dots-bot-{bid}"
+
+        create_issue(
+            repo,
+            "🤖 Bot Created",
+            f"Bot **{self.name.value}** was created.\n\n"
+            f"Owner: {interaction.user}\n"
+            f"Description: {self.desc.value}\n"
+            f"Tags: {self.tags.value}"
+        )
+
         admin = await bot.fetch_user(ADMIN_ID)
         await admin.send(embed=discord.Embed(title=f"Deploy {bid}"), view=DoneView(bid))
 
         await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
 
 class EditBotModal(Modal, title="Edit Bot"):
-    bot_id = TextInput(label="BotID")
-    password = TextInput(label="Password")
-    name = TextInput(label="New name", required=False)
+    name = TextInput(label="Bot name", required=False)
+    desc = TextInput(label="Bot description", required=False, style=discord.TextStyle.paragraph)
+    tags = TextInput(label="Tags", required=False)
+    password = TextInput(label="New password (optional)", required=False, min_length=8, max_length=100)
+
+    def __init__(self, bot_id):
+        super().__init__()
+        self.bot_id = bot_id
 
     async def on_submit(self, interaction):
-        bid = self.bot_id.value
+        bid = self.bot_id
+        bot_data = bots_data[bid]
 
-        if bid not in bots_data:
-            return await interaction.response.send_message("❌ Invalid ID", ephemeral=True)
-
-        if bots_data[bid]["password"] != hash_password(self.password.value):
-            return await interaction.response.send_message("❌ Wrong password", ephemeral=True)
+        updates = []
 
         if self.name.value:
-            bots_data[bid]["name"] = self.name.value
+            bot_data["name"] = self.name.value
+            updates.append(f"Name → {self.name.value}")
+        if self.desc.value:
+            bot_data["description"] = self.desc.value
+            updates.append(f"Description → {self.desc.value}")
+        if self.tags.value:
+            bot_data["tags"] = self.tags.value
+            updates.append(f"Tags → {self.tags.value}")
+        if self.password.value:
+            bot_data["password"] = hash_password(self.password.value)
+            updates.append("Password changed")
 
         save()
-        await interaction.response.send_message("✅ Updated!", ephemeral=True)
+
+        # GitHub issue
+        repo = f"dots-bot-{bid}"
+        create_issue(
+            repo,
+            "✏️ Bot Edited",
+            "The bot was edited with the following changes:\n" + "\n".join(updates) + f"\n\nEdited by: {interaction.user}"
+        )
+
+        await interaction.response.send_message("✅ Bot updated!", ephemeral=True)
 
 class CommandModal(Modal, title="Add Command"):
     bot_id = TextInput(label="BotID")
@@ -319,6 +365,17 @@ class CommandModal(Modal, title="Add Command"):
             "category": self.category.value or "other"
         }
 
+        repo = f"dots-bot-{bid}"
+
+        create_issue(
+            repo,
+            "➕ Command Added",
+            f"Command `{trigger}` added.\n\n"
+            f"Response: {response}\n"
+            f"Category: {self.category.value or 'other'}\n"
+            f"By: {interaction.user}"
+        )
+
         update_config(repo, config, sha)
         redeploy(bid)
 
@@ -343,9 +400,18 @@ class CommandView(View):
     async def delete(self, interaction, button):
         repo = f"dots-bot-{self.bot_id}"
         config, sha = get_config(repo)
-
         if self.trigger in config.get("commands", {}):
             del config["commands"][self.trigger]
+
+            repo = f"dots-bot-{self.bot_id}"
+
+            create_issue(
+                repo,
+                "🗑️ Command Deleted",
+                f"Command `{self.trigger}` was deleted.\n\n"
+                f"By: {interaction.user}"
+            )
+            
             update_config(repo, config, sha)
             redeploy(self.bot_id)
 
@@ -364,6 +430,16 @@ class EditCommandModal(Modal, title="Edit Command"):
         config, sha = get_config(repo)
 
         config["commands"][self.trigger]["response"] = self.new_text.value
+
+        repo = f"dots-bot-{self.bot_id}"
+
+        create_issue(
+            repo,
+            "✏️ Command Edited",
+            f"Command `{self.trigger}` updated.\n\n"
+            f"New response: {self.new_text.value}\n"
+            f"By: {interaction.user}"
+        )
 
         update_config(repo, config, sha)
         redeploy(self.bot_id)
