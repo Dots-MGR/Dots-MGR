@@ -276,10 +276,6 @@ class NewBotModal(Modal, title="New bot form"):
 
         bid = str(free["client_id"])  # 🔥 EZ AZ APP ID
 
-        free = get_free_bot()
-        if not free:
-            return await interaction.response.send_message("❌ No bots", ephemeral=True)
-
         bots_data[bid] = {
             "name": self.name.value,
             "description": self.desc.value,
