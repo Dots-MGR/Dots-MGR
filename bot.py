@@ -269,12 +269,15 @@ class NewBotModal(Modal, title="New bot form"):
     tags = TextInput(label="Tags", required=False, placeholder="fun, helpful")
     password = TextInput(label="Password", min_length=8, max_length=100, placeholder="12345678")
 
-    async def on_submit(self, interaction):
+async def on_submit(self, interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    try:
         free = get_free_bot()
         if not free:
-            return await interaction.response.send_message("❌ No bots", ephemeral=True)
+            return await interaction.followup.send("❌ No bots")
 
-        bid = str(free["client_id"])  # 🔥 EZ AZ APP ID
+        bid = str(free["client_id"])
 
         bots_data[bid] = {
             "name": self.name.value,
@@ -291,22 +294,29 @@ class NewBotModal(Modal, title="New bot form"):
 
         repo = f"dots-bot-{bid}"
 
-        create_issue(
-            repo,
-            "🤖 Bot Created",
-            f"Bot **{self.name.value}** was created.\n\n"
-            f"Owner: {interaction.user}\n"
-            f"Description: {self.desc.value}\n"
-            f"Tags: {self.tags.value}"
-        )
-
-        admin = await bot.fetch_user(ADMIN_ID)
         try:
-            await admin.send(embed=discord.Embed(title=f"Deploy {bid}"), view=DoneView(bid))
+            create_issue(
+                repo,
+                "🤖 Bot Created",
+                f"Bot {self.name.value} created\n"
+                f"Owner: {interaction.user}\n"
+                f"Description: {self.desc.value}\n"
+                f"Tags: {self.tags.value}"
+            )
         except Exception as e:
-            log(f"Failed to DM admin: {e}")
+            print("Issue error:", e)
 
-        await interaction.response.send_message(f"🚀 Created (ID: {bid})", ephemeral=True)
+        try:
+            admin = await bot.fetch_user(ADMIN_ID)
+            await admin.send(f"Deploy {bid}")
+        except Exception as e:
+            print("DM error:", e)
+
+        await interaction.followup.send(f"🚀 Created (ID: {bid})")
+
+    except Exception as e:
+        print("MODAL CRASH:", repr(e))
+        await interaction.followup.send(f"❌ Error: {e}")
 
 class EditBotModal(Modal, title="Edit Bot"):
     name = TextInput(label="Bot name", required=False)
