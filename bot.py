@@ -22,10 +22,9 @@ def log(msg, level="INFO"):
     entry = f"[{timestamp}] [{level}] {msg}"
 
     print(entry)
-    logs.append(entry)
 
-    if len(logs) > 200:
-        logs.pop(0)
+    with open("bot.log", "a", encoding="utf-8") as f:
+        f.write(entry + "\n")
 
 @app.route("/")
 def home():
