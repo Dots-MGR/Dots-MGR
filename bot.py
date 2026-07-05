@@ -138,8 +138,8 @@ def create_repo_from_template(bot_id):
 
     r = requests.post(url, headers=headers, json=data)
 
-    log(f"GITHUB STATUS: {r.status_code}", DEBUG)
-    log(f"GITHUB RESPONSE: {r.text}", DEBUG)
+    log(f"GITHUB STATUS: {r.status_code}", "DEBUG")
+    log(f"GITHUB RESPONSE: {r.text}", "DEBUG")
 
     if r.status_code in [200, 201]:
         try:
@@ -179,8 +179,8 @@ def create_issue(repo_name, title, body):
 
     r = requests.post(url, headers=headers, json=data)
 
-    log(f"ISSUE STATUS: {r.status_code}", DEBUG)
-    log(f"ISSUE RESPONSE: {r.text}", DEBUG)
+    log(f"ISSUE STATUS: {r.status_code}", "DEBUG")
+    log(f"ISSUE RESPONSE: {r.text}", "DEBUG")
 
 # ---------- RENDER ----------
 def deploy(bot_id, repo, token):
@@ -224,10 +224,10 @@ def deploy(bot_id, repo, token):
         json=payload
     )
 
-    log("========== RENDER DEBUG ==========", DEBUG)
-    log(f"STATUS: {r.status_code}", DEBUG)
-    log(f"BODY: {r.text}", DEBUG)
-    log("==================================", DEBUG)
+    log("========== RENDER DEBUG ==========", "DEBUG")
+    log(f"STATUS: {r.status_code}", "DEBUG")
+    log(f"BODY: {r.text}", "DEBUG")
+    log("==================================", "DEBUG")
 
     if r.status_code in [200, 201]:
         # Save the Render service ID in bots_data
@@ -507,7 +507,7 @@ def release_bot(client_id):
     for b in available_bots:
         if str(b["client_id"]) == str(client_id):
             b["used"] = False
-            log(f"🔓 Bot {client_id} released back to pool", SUCCESS)
+            log(f"🔓 Bot {client_id} released back to pool", "SUCCESS")
             return
 
 class DeleteBotModal(Modal, title="Delete Bot"):
@@ -680,6 +680,6 @@ async def on_ready():
     if not status_loop.is_running():
         status_loop.start()
 
-    log("READY", INFO)
+    log("READY", "INFO")
 
 bot.run(DISCORD_TOKEN)
