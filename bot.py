@@ -680,6 +680,6 @@ async def on_ready():
     if not status_loop.is_running():
         status_loop.start()
 
-    log("READY")
+    log("READY", INFO)
 
 bot.run(DISCORD_TOKEN)
