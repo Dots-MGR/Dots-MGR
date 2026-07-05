@@ -100,10 +100,22 @@ def load():
 load()  # before any modal or command that accesses bots_data
 
 def get_free_bot():
+    log("Searching for a free bot...", "INFO")
+
     for b in available_bots:
+        log(
+            f'Checking client_id={b.get("client_id")} '
+            f'used={b.get("used")} '
+            f'has_token={bool(b.get("token"))}',
+            "INFO"
+        )
+
         if not b["used"] and b["token"]:
             b["used"] = True
+            log(f'Allocated bot {b["client_id"]}', "INFO")
             return b
+
+    log("No free bots found.", "WARNING")
     return None
 
 # ---------- Loop ----------
