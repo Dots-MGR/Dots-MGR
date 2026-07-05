@@ -268,54 +268,79 @@ class NewBotModal(Modal, title="New bot form"):
     tags = TextInput(label="Tags", required=False, placeholder="fun, helpful")
     password = TextInput(label="Password", min_length=8, max_length=100, placeholder="12345678")
 
-async def on_submit(self, interaction):
-    await interaction.response.defer(ephemeral=True)
+    async def on_submit(self, interaction):
+        log("NewBotModal submitted.", "INFO")
 
-    try:
-        free = get_free_bot()
-        if not free:
-            return await interaction.followup.send("❌ No bots")
-
-        bid = str(free["client_id"])
-
-        bots_data[bid] = {
-            "name": self.name.value,
-            "description": self.desc.value,
-            "tags": self.tags.value,
-            "password": hash_password(self.password.value),
-            "owner": interaction.user.id,
-            "token": free["token"],
-            "client_id": free["client_id"],
-            "status": "pending"
-        }
-
-        save()
-
-        repo = f"dots-bot-{bid}"
+        await interaction.response.defer(ephemeral=True)
+        log("Interaction deferred.", "INFO")
 
         try:
-            create_issue(
-                repo,
-                "🤖 Bot Created",
-                f"Bot {self.name.value} created\n"
-                f"Owner: {interaction.user}\n"
-                f"Description: {self.desc.value}\n"
-                f"Tags: {self.tags.value}"
+            log("Calling get_free_bot()...", "INFO")
+            free = get_free_bot()
+            log(f"get_free_bot() returned: {free}", "INFO")
+
+            if not free:
+                return await interaction.followup.send("❌ No bots", ephemeral=True)
+
+            bid = str(free["client_id"])
+            log(f"Using Bot ID: {bid}", "INFO")
+
+            bots_data[bid] = {
+                "name": self.name.value,
+                "description": self.desc.value,
+                "tags": self.tags.value,
+                "password": hash_password(self.password.value),
+                "owner": interaction.user.id,
+                "token": free["token"],
+                "client_id": free["client_id"],
+                "status": "pending"
+            }
+
+            log("Saving data.json...", "INFO")
+            save()
+            log("Save complete.", "INFO")
+
+            repo = f"dots-bot-{bid}"
+
+            try:
+                log("Creating GitHub issue...", "INFO")
+                create_issue(
+                    repo,
+                    "🤖 Bot Created",
+                    f"Bot {self.name.value} created\n"
+                    f"Owner: {interaction.user}\n"
+                    f"Description: {self.desc.value}\n"
+                    f"Tags: {self.tags.value}"
+                )
+                log("GitHub issue created.", "INFO")
+            except Exception as e:
+                log(f"Issue error: {e}", "ERROR")
+
+            try:
+                log("Sending admin DM...", "INFO")
+                admin = await bot.fetch_user(ADMIN_ID)
+                await admin.send(f"Deploy {bid}")
+                log("Admin DM sent.", "INFO")
+            except Exception as e:
+                log(f"DM error: {e}", "ERROR")
+
+            log("Sending success followup...", "INFO")
+            await interaction.followup.send(
+                f"🚀 Created (ID: {bid})",
+                ephemeral=True
             )
+            log("Success followup sent.", "INFO")
+
         except Exception as e:
-            log("Issue error: {e}", "ERROR")
+            log(f"MODAL CRASH: {repr(e)}", "ERROR")
 
-        try:
-            admin = await bot.fetch_user(ADMIN_ID)
-            await admin.send(f"Deploy {bid}")
-        except Exception as e:
-            log("DM error: {e}", "ERROR")
-
-        await interaction.followup.send(f"🚀 Created (ID: {bid})")
-
-    except Exception as e:
-        log(f"MODAL CRASH: {repr(e)}", "ERROR")
-        await interaction.followup.send(f"❌ Error: {e}")
+            try:
+                await interaction.followup.send(
+                    f"❌ Error: {e}",
+                    ephemeral=True
+                )
+            except Exception as e2:
+                log(f"Failed to send error followup: {e2}", "ERROR")
 
 class EditBotModal(Modal, title="Edit Bot"):
     name = TextInput(label="Bot name", required=False)
