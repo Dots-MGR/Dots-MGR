@@ -691,6 +691,25 @@ async def poolbot(interaction: discord.Interaction, bot_id: str):
 
     await interaction.response.send_message("❌ Bot not found in pool!", ephemeral=True)
 
+@bot.tree.command(name="resetpool")
+async def resetpool(interaction: discord.Interaction):
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message("❌ Can't use command!", ephemeral=True)
+
+    reset_count = 0
+
+    for b in available_bots:
+        if b.get("used"):
+            b["used"] = False
+            reset_count += 1
+
+    save()
+
+    await interaction.response.send_message(
+        f"🔄 Pool reset complete. Freed {reset_count} bots.",
+        ephemeral=True
+    )
+
 # ---------- MENU ----------
 class Menu(View):
     def __init__(self):
