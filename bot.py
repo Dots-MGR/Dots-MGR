@@ -17,13 +17,13 @@ import datetime
 app = Flask(__name__)
 logs = []
 
-def log(msg):
-    time = datetime.datetime.now().strftime("%H:%M:%S")
-    entry = f"[{time}] {msg}"
+def log(msg, level="INFO"):
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    entry = f"[{timestamp}] [{level}] {msg}"
+
     print(entry)
     logs.append(entry)
 
-    # limit log méret (ne zabálja a RAM-ot)
     if len(logs) > 200:
         logs.pop(0)
 
@@ -304,18 +304,18 @@ async def on_submit(self, interaction):
                 f"Tags: {self.tags.value}"
             )
         except Exception as e:
-            print("Issue error:", e)
+            log("Issue error: {e}")
 
         try:
             admin = await bot.fetch_user(ADMIN_ID)
             await admin.send(f"Deploy {bid}")
         except Exception as e:
-            print("DM error:", e)
+            log("DM error: {e}")
 
         await interaction.followup.send(f"🚀 Created (ID: {bid})")
 
     except Exception as e:
-        print("MODAL CRASH:", repr(e))
+        log("MODAL CRASH: {repr(e)}")
         await interaction.followup.send(f"❌ Error: {e}")
 
 class EditBotModal(Modal, title="Edit Bot"):
