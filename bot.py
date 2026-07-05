@@ -303,18 +303,18 @@ async def on_submit(self, interaction):
                 f"Tags: {self.tags.value}"
             )
         except Exception as e:
-            log("Issue error: {e}")
+            log("Issue error: {e}", "ERROR")
 
         try:
             admin = await bot.fetch_user(ADMIN_ID)
             await admin.send(f"Deploy {bid}")
         except Exception as e:
-            log("DM error: {e}")
+            log("DM error: {e}", "ERROR")
 
         await interaction.followup.send(f"🚀 Created (ID: {bid})")
 
     except Exception as e:
-        log("MODAL CRASH: {repr(e)}")
+        log(f"MODAL CRASH: {repr(e)}", "ERROR")
         await interaction.followup.send(f"❌ Error: {e}")
 
 class EditBotModal(Modal, title="Edit Bot"):
