@@ -580,9 +580,13 @@ class DoneView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot_id = bot_id
 
-    @discord.ui.button(label="Deploy", style=discord.ButtonStyle.success)
+    @discord.ui.button(
+        label="Deploy",
+        style=discord.ButtonStyle.success,
+        custom_id="deploy_button"  # 🔥 IMPORTANT FIX
+    )
     async def deploy(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("Deploy clicked", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
         try:
             bid = str(self.bot_id)
@@ -592,12 +596,10 @@ class DoneView(discord.ui.View):
 
             data = bots_data[bid]
 
-            # GitHub repo
             repo = create_repo_from_template(bid)
             if not repo:
                 return await interaction.followup.send("❌ Repo creation failed!", ephemeral=True)
 
-            # Render deploy
             deploy(bid, repo, data["token"])
 
             data["status"] = "live"
@@ -608,8 +610,8 @@ class DoneView(discord.ui.View):
             await interaction.followup.send("✅ Bot deployed successfully!", ephemeral=True)
 
         except Exception as e:
-            await interaction.followup.send(f"❌ Error: {str(e)}", ephemeral=True)
-
+            await interaction.followup.send(f"❌ Error: {repr(e)}", ephemeral=True)
+            
 # ---------- COMMANDS ----------
 @bot.tree.command(name="getstarted", description="Opens the main menu")
 async def getstarted(interaction):
