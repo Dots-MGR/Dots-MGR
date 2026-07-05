@@ -575,14 +575,14 @@ class DeleteBotModal(Modal, title="Delete Bot"):
 
         await interaction.response.send_message("🗑️ Deleted!", ephemeral=True)
 # ---------- DEPLOY ----------
-class DoneView(View):
+class DoneView(discord.ui.View):
     def __init__(self, bot_id):
         super().__init__(timeout=None)
         self.bot_id = bot_id
 
     @discord.ui.button(label="Deploy", style=discord.ButtonStyle.success)
-    async def done(self, interaction, button):
-        await interaction.response.defer(ephemeral=True)  # 🔥 EZ A FIX
+    async def deploy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("Deploy clicked", ephemeral=True)
 
         try:
             bid = str(self.bot_id)
