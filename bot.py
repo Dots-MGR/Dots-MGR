@@ -724,6 +724,132 @@ async def resetpool(interaction: discord.Interaction):
         ephemeral=True
     )
 
+# ---------- ONBOARD EXISTING BOT ----------
+
+class OnboardBotModal(Modal, title="Import Existing Bot"):
+    token = TextInput(
+        label="Discord Bot Token",
+        placeholder="Paste the bot token here",
+        min_length=20,
+        max_length=200,
+        required=True
+    )
+
+    def __init__(self, bot_id: str):
+        super().__init__()
+        self.bot_id = bot_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Only the authorized administrator can import bots.
+        if interaction.user.id != ADMIN_ID:
+            return await interaction.response.send_message(
+                "❌ You aren't authorized to import bots.",
+                ephemeral=True
+            )
+
+        await interaction.response.defer(ephemeral=True)
+
+        token = self.token.value.strip()
+
+        # Verify the token with Discord without blocking the bot.
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                "https://discord.com/api/v10/users/@me",
+                headers={"Authorization": f"Bot {token}"},
+                timeout=15
+            )
+
+            if response.status_code != 200:
+                return await interaction.followup.send(
+                    "❌ Discord rejected this token. Check it and try again.",
+                    ephemeral=True
+                )
+
+            bot_info = response.json()
+
+        except requests.RequestException:
+            return await interaction.followup.send(
+                "❌ Couldn't contact Discord to verify the bot.",
+                ephemeral=True
+            )
+
+        verified_id = str(bot_info.get("id", ""))
+
+        # Never register a different bot than the one requested.
+        if verified_id != self.bot_id:
+            return await interaction.followup.send(
+                "❌ The token belongs to a different bot. "
+                f"Verified ID: `{verified_id}`",
+                ephemeral=True
+            )
+
+        if not bot_info.get("bot", False):
+            return await interaction.followup.send(
+                "❌ This account isn't a bot account.",
+                ephemeral=True
+            )
+
+        # Prevent collisions with existing registered bots.
+        if self.bot_id in bots_data or self.bot_id in external_bots:
+            return await interaction.followup.send(
+                "❌ This bot ID is already registered in Dots MGR.",
+                ephemeral=True
+            )
+
+        # Store metadata ONLY. Never store the supplied token.
+        external_bots[self.bot_id] = {
+            "name": bot_info.get("username", "Unknown Bot"),
+            "bot_id": self.bot_id,
+            "owner_id": interaction.user.id,
+            "type": "external",
+            "hosting": "railway_or_other",
+            "status": "imported",
+            "registered_at": datetime.datetime.now(
+                datetime.timezone.utc
+            ).isoformat()
+        }
+
+        save()
+
+        log(
+            f"External bot registered: {self.bot_id} "
+            f"by admin {interaction.user.id}",
+            "INFO"
+        )
+
+        await interaction.followup.send(
+            f"✅ **{discord.utils.escape_markdown(bot_info.get('username', 'Unknown Bot'))}** "
+            "has been registered in Dots MGR!\n\n"
+            f"**Bot ID:** `{self.bot_id}`\n"
+            "**Type:** External\n"
+            "**Hosting management:** Not connected\n"
+            "**Token saved:** No",
+            ephemeral=True
+        )
+
+@bot.tree.command(
+    name="onboardbot",
+    description="Register an existing Discord bot in Dots MGR"
+)
+async def onboardbot(
+    interaction: discord.Interaction,
+    bot_id: str
+):
+    if interaction.user.id != ADMIN_ID:
+        return await interaction.response.send_message(
+            "❌ You aren't authorized to use this command.",
+            ephemeral=True
+        )
+
+    if not bot_id.isdigit():
+        return await interaction.response.send_message(
+            "❌ Enter a valid numeric Discord bot ID.",
+            ephemeral=True
+        )
+
+    await interaction.response.send_modal(OnboardBotModal(bot_id))
+
 # ---------- MENU ----------
 class Menu(View):
     def __init__(self):
