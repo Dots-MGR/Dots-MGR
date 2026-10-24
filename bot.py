@@ -60,6 +60,7 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 DATA_FILE = "data.json"
 
 bots_data = {}
+external_bots = {}
 
 # ---------- BOT POOL ----------
 available_bots = [
