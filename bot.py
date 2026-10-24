@@ -153,7 +153,7 @@ async def status_loop():
 # ---------- GITHUB ----------
 def create_repo_from_template(bot_id):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{TEMPLATE_REPO}/generate"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
 
     data = {
         "owner": GITHUB_ORG,
@@ -177,7 +177,7 @@ def create_repo_from_template(bot_id):
 
 def get_config(repo):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
     r = requests.get(url, headers=headers)
     file = r.json()
     config = json.loads(base64.b64decode(file["content"]).decode())
@@ -185,7 +185,7 @@ def get_config(repo):
 
 def update_config(repo, config, sha):
     url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo}/contents/config.json"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    headers = {"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
 
     requests.put(url, headers=headers, json={
         "message": "update config",
@@ -194,18 +194,28 @@ def update_config(repo, config, sha):
     })
 
 def create_issue(repo_name, title, body):
-    url = f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bot_id}/issues"
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    """Create an issue in the specified repository."""
+    if not GITHUB_TOKEN:
+        log("Skipping GitHub issue: GITHUB_TOKEN is not configured.", "WARNING")
+        return False
 
-    data = {
-        "title": title,
-        "body": body
+    url = f"https://api.github.com/repos/{GITHUB_ORG}/{repo_name}/issues"
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    r = requests.post(url, headers=headers, json=data)
-
-    log(f"ISSUE STATUS: {r.status_code}", "DEBUG")
-    log(f"ISSUE RESPONSE: {r.text}", "DEBUG")
+    response = requests.post(
+        url,
+        headers=headers,
+        json={"title": title, "body": body},
+        timeout=20,
+    )
+    log(f"ISSUE STATUS: {response.status_code}", "DEBUG")
+    if not response.ok:
+        log(f"ISSUE RESPONSE: {response.text}", "WARNING")
+    return response.ok
 
 # ---------- RENDER ----------
 def deploy(bot_id, repo, token):
@@ -579,7 +589,7 @@ class DeleteBotModal(Modal, title="Delete Bot"):
 
         requests.delete(
             f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bid}",
-            headers={"Authorization": f"token {GITHUB_TOKEN}"}
+            headers={"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
         )
 
         release_bot(bid)
@@ -692,7 +702,7 @@ async def poolbot(interaction: discord.Interaction, bot_id: str):
             # 🔥 GitHub repo törlés
             requests.delete(
                 f"https://api.github.com/repos/{GITHUB_ORG}/dots-bot-{bot_id}",
-                headers={"Authorization": f"token {GITHUB_TOKEN}"}
+                headers={"Authorization": f"Bearer {GITHUB_TOKEN}", "Accept": "application/vnd.github+json"}
             )
 
             # 🔓 pool reset
@@ -861,79 +871,97 @@ class EditBotSelectView(View):
 class EditBotSelect(Select):
     def __init__(self, options):
         super().__init__(
-            placeholder="Choose a bot to edit...",
-            options=options
+            placeholder="Choose a bot...",
+            min_values=1,
+            max_values=1,
+            options=options,
         )
 
     async def callback(self, interaction: discord.Interaction):
         bid = self.values[0]
-        data = bots_data.get(bid)
 
+        # Imported bots are listed in the menu, but their settings are not
+        # editable through Dots MGR until their repository/hosting is connected.
+        if bid in external_bots:
+            data = external_bots[bid]
+            if int(data.get("owner_id", 0)) != interaction.user.id:
+                return await interaction.response.send_message(
+                    "❌ You don't have permission to manage that bot.",
+                    ephemeral=True,
+                )
+
+            return await interaction.response.send_message(
+                f"**{discord.utils.escape_markdown(data.get('name', 'Unknown Bot'))}** "
+                "is registered as an external bot.\n"
+                f"**Bot ID:** `{bid}`\n"
+                f"**Hosting:** `{data.get('hosting', 'external')}`\n"
+                f"**Status:** `{data.get('status', 'imported')}`\n\n"
+                "Its code and hosting are not connected to Dots MGR yet, "
+                "so it cannot be edited or redeployed here.",
+                ephemeral=True,
+            )
+
+        data = bots_data.get(bid)
         if not data or int(data.get("owner", 0)) != interaction.user.id:
             return await interaction.response.send_message(
                 "❌ You don't own that bot.",
-                ephemeral=True
+                ephemeral=True,
             )
 
         await interaction.response.send_modal(EditBotModal(bid))
-        
+
+
 class Menu(View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="New Bot", style=discord.ButtonStyle.success)
-    async def new(self, interaction, button):
+    async def new(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(NewBotModal())
 
-	@discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
-	async def edit(
-		self,
-		interaction: discord.Interaction,
-		button: discord.ui.Button
-	):
-		user_id = interaction.user.id
-	
-		# Bots created through Dots MGR
-		user_bots = [
-			(bid, data)
-			for bid, data in bots_data.items()
-			if int(data.get("owner", 0)) == user_id
-		]
-	
-		# Bots imported using /onboardbot
-		user_bots.extend(
-			(bid, data)
-			for bid, data in external_bots.items()
-			if int(data.get("owner_id", 0)) == user_id
-		)
-	
-		if not user_bots:
-			return await interaction.response.send_message(
-				"❌ You don't have any bots registered in Dots MGR.",
-				ephemeral=True
-			)
-	
-		options = [
-			discord.SelectOption(
-				label=data.get("name", "Unknown Bot")[:100],
-				value=bid,
-				description=(
-					f"{'External' if data.get('type') == 'external' else 'Dots MGR'} "
-					f"bot • ID: {bid}"
-				)[:100]
-			)
-			for bid, data in user_bots[:25]
-		]
-	
-		await interaction.response.send_message(
-			"Select the bot you want to edit:",
-			view=EditBotSelectView(options),
-			ephemeral=True
-		)
+    @discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
+    async def edit(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user_id = interaction.user.id
+
+        user_bots = [
+            (bid, data)
+            for bid, data in bots_data.items()
+            if int(data.get("owner", 0)) == user_id
+        ]
+        user_bots.extend(
+            (bid, data)
+            for bid, data in external_bots.items()
+            if int(data.get("owner_id", 0)) == user_id
+        )
+
+        if not user_bots:
+            return await interaction.response.send_message(
+                "❌ You don't have any bots registered in Dots MGR.",
+                ephemeral=True,
+            )
+
+        options = [
+            discord.SelectOption(
+                label=str(data.get("name", "Unknown Bot"))[:100],
+                value=str(bid),
+                description=(
+                    f"{'External' if data.get('type') == 'external' else 'Dots MGR'} "
+                    f"bot • ID: {bid}"
+                )[:100],
+            )
+            for bid, data in user_bots[:25]
+        ]
+
+        await interaction.response.send_message(
+            "Select the bot you want to manage:",
+            view=EditBotSelectView(options),
+            ephemeral=True,
+        )
 
     @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
-    async def delete(self, interaction, button):
+    async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(DeleteBotModal())
+
 
 # ---------- READY ----------
 @bot.event
@@ -945,5 +973,8 @@ async def on_ready():
         status_loop.start()
 
     log("READY", "INFO")
+
+if not DISCORD_TOKEN:
+    raise RuntimeError("DISCORD_TOKEN environment variable is missing.")
 
 bot.run(DISCORD_TOKEN)
