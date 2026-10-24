@@ -85,18 +85,29 @@ def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def save():
-    with open(DATA_FILE, "w") as f:
-        json.dump({"bots": bots_data, "pool": available_bots}, f, indent=2)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump({
+            "bots": bots_data,
+            "pool": available_bots,
+            "external_bots": external_bots
+        }, f, indent=2)
+
 
 def load():
-    global bots_data, available_bots
+    global bots_data, available_bots, external_bots
+
     try:
-        with open(DATA_FILE) as f:
+        with open(DATA_FILE, encoding="utf-8") as f:
             data = json.load(f)
-            bots_data = data["bots"]
-            available_bots = data["pool"]
-    except:
+
+        bots_data = data.get("bots", {})
+        available_bots = data.get("pool", available_bots)
+        external_bots = data.get("external_bots", {})
+
+    except FileNotFoundError:
         pass
+    except (json.JSONDecodeError, OSError) as e:
+        log(f"Could not load data.json: {e}", "ERROR")
 
 load()  # before any modal or command that accesses bots_data
 
