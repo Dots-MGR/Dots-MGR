@@ -885,38 +885,51 @@ class Menu(View):
     async def new(self, interaction, button):
         await interaction.response.send_modal(NewBotModal())
 
-    @discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
-    async def edit(self, interaction: discord.Interaction, button: discord.ui.Button):
-        user_bots = [
-            (bid, data)
-            for bid, data in bots_data.items()
-            if int(data.get("owner", 0)) == interaction.user.id
-        ]
-
-        if not user_bots:
-            return await interaction.response.send_message(
-                "❌ You don't have any bots to edit.",
-                ephemeral=True
-            )
-
-        if len(user_bots) == 1:
-            bid, _ = user_bots[0]
-            return await interaction.response.send_modal(EditBotModal(bid))
-
-        options = [
-            discord.SelectOption(
-                label=data["name"][:100],
-                value=bid,
-                description=f"Bot ID: {bid}"[:100]
-            )
-            for bid, data in user_bots[:25]
-        ]
-
-        await interaction.response.send_message(
-            "Select the bot you want to edit:",
-            view=EditBotSelectView(options),
-            ephemeral=True
-        )
+	@discord.ui.button(label="Edit Bot", style=discord.ButtonStyle.primary)
+	async def edit(
+		self,
+		interaction: discord.Interaction,
+		button: discord.ui.Button
+	):
+		user_id = interaction.user.id
+	
+		# Bots created through Dots MGR
+		user_bots = [
+			(bid, data)
+			for bid, data in bots_data.items()
+			if int(data.get("owner", 0)) == user_id
+		]
+	
+		# Bots imported using /onboardbot
+		user_bots.extend(
+			(bid, data)
+			for bid, data in external_bots.items()
+			if int(data.get("owner_id", 0)) == user_id
+		)
+	
+		if not user_bots:
+			return await interaction.response.send_message(
+				"❌ You don't have any bots registered in Dots MGR.",
+				ephemeral=True
+			)
+	
+		options = [
+			discord.SelectOption(
+				label=data.get("name", "Unknown Bot")[:100],
+				value=bid,
+				description=(
+					f"{'External' if data.get('type') == 'external' else 'Dots MGR'} "
+					f"bot • ID: {bid}"
+				)[:100]
+			)
+			for bid, data in user_bots[:25]
+		]
+	
+		await interaction.response.send_message(
+			"Select the bot you want to edit:",
+			view=EditBotSelectView(options),
+			ephemeral=True
+		)
 
     @discord.ui.button(label="Delete Bot", style=discord.ButtonStyle.danger)
     async def delete(self, interaction, button):
