@@ -852,6 +852,31 @@ async def onboardbot(
     await interaction.response.send_modal(OnboardBotModal(bot_id))
 
 # ---------- MENU ----------
+class EditBotSelectView(View):
+    def __init__(self, options):
+        super().__init__(timeout=180)
+        self.add_item(EditBotSelect(options))
+
+
+class EditBotSelect(Select):
+    def __init__(self, options):
+        super().__init__(
+            placeholder="Choose a bot to edit...",
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        bid = self.values[0]
+        data = bots_data.get(bid)
+
+        if not data or int(data.get("owner", 0)) != interaction.user.id:
+            return await interaction.response.send_message(
+                "❌ You don't own that bot.",
+                ephemeral=True
+            )
+
+        await interaction.response.send_modal(EditBotModal(bid))
+        
 class Menu(View):
     def __init__(self):
         super().__init__(timeout=None)
